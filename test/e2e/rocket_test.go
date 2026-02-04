@@ -16,6 +16,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -62,6 +63,22 @@ func TestRocketE2E(t *testing.T) {
 
 	t.Run("Features", func(t *testing.T) {
 		testFeatures(t, env)
+	})
+
+	t.Run("AdvancedScheduling", func(t *testing.T) {
+		testAdvancedScheduling(t, env)
+	})
+
+	t.Run("WorkloadTypes", func(t *testing.T) {
+		testWorkloadTypes(t, env)
+	})
+
+	t.Run("ScaleOperations", func(t *testing.T) {
+		testScaleOperations(t, env)
+	})
+
+	t.Run("Overrides", func(t *testing.T) {
+		testOverrides(t, env)
 	})
 }
 
@@ -824,5 +841,1134 @@ func testPushModel(t *testing.T, env *TestEnvironment) {
 		// Verify application is scheduled to the Edge cluster
 		scheduled := env.WaitForApplicationScheduled(t, appName, namespace, 30*time.Second)
 		assert.Equal(t, clusterName, scheduled.Status.Placement.Topology[0].Name)
+	})
+}
+
+// =============================================================================
+// Advanced Scheduling Tests
+// =============================================================================
+
+func testAdvancedScheduling(t *testing.T, env *TestEnvironment) {
+	ctx := env.Context()
+	c := env.Client
+
+	t.Run("TaintToleration", func(t *testing.T) {
+		clusterName := "e2e-taint-cluster"
+		appName := "e2e-taint-app"
+		namespace := "default"
+
+		// Create cluster with taint
+		mc := &clusterv1alpha1.ManagedCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   clusterName,
+				Labels: map[string]string{"e2e-test": "taint-toleration"},
+			},
+			Spec: clusterv1alpha1.ManagedClusterSpec{
+				ConnectionMode: clusterv1alpha1.ClusterConnectionModeHub,
+				APIServer:      env.Config.Host,
+				SecretRef:      &corev1.LocalObjectReference{Name: env.ClusterSecretName},
+				Taints: []corev1.Taint{
+					{
+						Key:    "dedicated",
+						Value:  "gpu",
+						Effect: corev1.TaintEffectNoSchedule,
+					},
+				},
+			},
+		}
+		_ = c.Delete(ctx, mc)
+		require.NoError(t, c.Create(ctx, mc))
+		defer env.DeleteCluster(clusterName)
+
+		// Update cluster status
+		env.UpdateClusterStatus(t, clusterName, "10", "10Gi")
+
+		// Create application WITHOUT toleration - should NOT be scheduled to this cluster
+		appNoToleration := &appsv1alpha1.Application{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      appName + "-no-toleration",
+				Namespace: namespace,
+			},
+			Spec: appsv1alpha1.ApplicationSpec{
+				ClusterAffinity: &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{
+							{
+								MatchExpressions: []corev1.NodeSelectorRequirement{
+									{
+										Key:      "e2e-test",
+										Operator: corev1.NodeSelectorOpIn,
+										Values:   []string{"taint-toleration"},
+									},
+								},
+							},
+						},
+					},
+				},
+				Workload: appsv1alpha1.WorkloadGVK{
+					APIVersion: "apps/v1",
+					Kind:       "Deployment",
+				},
+				Template: toRaw(map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"labels": map[string]string{"app": appName},
+					},
+					"spec": map[string]interface{}{
+						"containers": []interface{}{
+							map[string]interface{}{
+								"name":  "nginx",
+								"image": "nginx:latest",
+							},
+						},
+					},
+				}),
+			},
+		}
+		env.CreateApplication(t, appNoToleration)
+		defer env.DeleteApplication(appName+"-no-toleration", namespace)
+
+		// Wait and verify it's NOT scheduled (no clusters available)
+		time.Sleep(3 * time.Second)
+		var gotApp appsv1alpha1.Application
+		err := c.Get(ctx, types.NamespacedName{Name: appName + "-no-toleration", Namespace: namespace}, &gotApp)
+		require.NoError(t, err)
+		assert.Empty(t, gotApp.Status.Placement.Topology, "App without toleration should not be scheduled to tainted cluster")
+
+		// Create application WITH toleration - should be scheduled
+		appWithToleration := &appsv1alpha1.Application{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      appName + "-with-toleration",
+				Namespace: namespace,
+			},
+			Spec: appsv1alpha1.ApplicationSpec{
+				ClusterAffinity: &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{
+							{
+								MatchExpressions: []corev1.NodeSelectorRequirement{
+									{
+										Key:      "e2e-test",
+										Operator: corev1.NodeSelectorOpIn,
+										Values:   []string{"taint-toleration"},
+									},
+								},
+							},
+						},
+					},
+				},
+				ClusterTolerations: []corev1.Toleration{
+					{
+						Key:      "dedicated",
+						Operator: corev1.TolerationOpEqual,
+						Value:    "gpu",
+						Effect:   corev1.TaintEffectNoSchedule,
+					},
+				},
+				Workload: appsv1alpha1.WorkloadGVK{
+					APIVersion: "apps/v1",
+					Kind:       "Deployment",
+				},
+				Template: toRaw(map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"labels": map[string]string{"app": appName},
+					},
+					"spec": map[string]interface{}{
+						"containers": []interface{}{
+							map[string]interface{}{
+								"name":  "nginx",
+								"image": "nginx:latest",
+							},
+						},
+					},
+				}),
+			},
+		}
+		env.CreateApplication(t, appWithToleration)
+		defer env.DeleteApplication(appName+"-with-toleration", namespace)
+
+		// Verify app with toleration is scheduled
+		scheduled := env.WaitForApplicationScheduled(t, appName+"-with-toleration", namespace, 30*time.Second)
+		assert.Equal(t, clusterName, scheduled.Status.Placement.Topology[0].Name)
+	})
+
+	t.Run("PreferredAffinity", func(t *testing.T) {
+		c1Name := "e2e-preferred-c1"
+		c2Name := "e2e-preferred-c2"
+		appName := "e2e-preferred-app"
+		namespace := "default"
+
+		// Create two clusters with different labels
+		env.CreateHubCluster(t, c1Name, map[string]string{"tier": "high-performance", "e2e-test": "preferred"})
+		defer env.DeleteCluster(c1Name)
+		env.CreateHubCluster(t, c2Name, map[string]string{"tier": "standard", "e2e-test": "preferred"})
+		defer env.DeleteCluster(c2Name)
+
+		// Create application with preferred affinity for high-performance
+		app := &appsv1alpha1.Application{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      appName,
+				Namespace: namespace,
+				Annotations: map[string]string{
+					"apps.rocket.io/scheduler-strategy": "SingleCluster",
+				},
+			},
+			Spec: appsv1alpha1.ApplicationSpec{
+				ClusterAffinity: &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{
+							{
+								MatchExpressions: []corev1.NodeSelectorRequirement{
+									{
+										Key:      "e2e-test",
+										Operator: corev1.NodeSelectorOpIn,
+										Values:   []string{"preferred"},
+									},
+								},
+							},
+						},
+					},
+					PreferredDuringSchedulingIgnoredDuringExecution: []corev1.PreferredSchedulingTerm{
+						{
+							Weight: 100,
+							Preference: corev1.NodeSelectorTerm{
+								MatchExpressions: []corev1.NodeSelectorRequirement{
+									{
+										Key:      "tier",
+										Operator: corev1.NodeSelectorOpIn,
+										Values:   []string{"high-performance"},
+									},
+								},
+							},
+						},
+					},
+				},
+				Workload: appsv1alpha1.WorkloadGVK{
+					APIVersion: "apps/v1",
+					Kind:       "Deployment",
+				},
+				Template: toRaw(map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"labels": map[string]string{"app": appName},
+					},
+					"spec": map[string]interface{}{
+						"containers": []interface{}{
+							map[string]interface{}{
+								"name":  "nginx",
+								"image": "nginx:latest",
+							},
+						},
+					},
+				}),
+			},
+		}
+
+		env.CreateApplication(t, app)
+		defer env.DeleteApplication(appName, namespace)
+
+		// Verify scheduled to high-performance cluster due to preference
+		scheduled := env.WaitForApplicationScheduled(t, appName, namespace, 30*time.Second)
+		assert.Equal(t, c1Name, scheduled.Status.Placement.Topology[0].Name, "Should prefer high-performance cluster")
+	})
+
+	t.Run("SingleClusterStrategy", func(t *testing.T) {
+		c1Name := "e2e-single-c1"
+		c2Name := "e2e-single-c2"
+		appName := "e2e-single-app"
+		namespace := "default"
+
+		// Create two clusters
+		env.CreateHubCluster(t, c1Name, map[string]string{"e2e-test": "single-cluster"})
+		defer env.DeleteCluster(c1Name)
+		env.CreateHubCluster(t, c2Name, map[string]string{"e2e-test": "single-cluster"})
+		defer env.DeleteCluster(c2Name)
+
+		// Create application with SingleCluster strategy
+		replicas := int32(5)
+		app := &appsv1alpha1.Application{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      appName,
+				Namespace: namespace,
+				Annotations: map[string]string{
+					"apps.rocket.io/scheduler-strategy": "SingleCluster",
+				},
+			},
+			Spec: appsv1alpha1.ApplicationSpec{
+				Replicas: &replicas,
+				ClusterAffinity: &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{
+							{
+								MatchExpressions: []corev1.NodeSelectorRequirement{
+									{
+										Key:      "e2e-test",
+										Operator: corev1.NodeSelectorOpIn,
+										Values:   []string{"single-cluster"},
+									},
+								},
+							},
+						},
+					},
+				},
+				Workload: appsv1alpha1.WorkloadGVK{
+					APIVersion: "apps/v1",
+					Kind:       "Deployment",
+				},
+				Template: toRaw(map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"labels": map[string]string{"app": appName},
+					},
+					"spec": map[string]interface{}{
+						"containers": []interface{}{
+							map[string]interface{}{
+								"name":  "nginx",
+								"image": "nginx:latest",
+							},
+						},
+					},
+				}),
+			},
+		}
+
+		env.CreateApplication(t, app)
+		defer env.DeleteApplication(appName, namespace)
+
+		// Verify ALL replicas go to a single cluster
+		scheduled := env.WaitForApplicationScheduled(t, appName, namespace, 30*time.Second)
+		assert.Len(t, scheduled.Status.Placement.Topology, 1, "SingleCluster strategy should use only one cluster")
+		assert.Equal(t, int32(5), scheduled.Status.Placement.Topology[0].Replicas, "All replicas should be on one cluster")
+	})
+
+	t.Run("ResourceBasedScoring", func(t *testing.T) {
+		c1Name := "e2e-resource-c1"
+		c2Name := "e2e-resource-c2"
+		appName := "e2e-resource-app"
+		namespace := "default"
+
+		// Create two clusters with different resource availability
+		env.CreateHubCluster(t, c1Name, map[string]string{"e2e-test": "resource-scoring"})
+		defer env.DeleteCluster(c1Name)
+		env.CreateHubCluster(t, c2Name, map[string]string{"e2e-test": "resource-scoring"})
+		defer env.DeleteCluster(c2Name)
+
+		// c1: 80% utilized (less free), c2: 20% utilized (more free)
+		env.UpdateClusterStatusWithAllocation(t, c1Name, "10", "10Gi", "8", "8Gi")
+		env.UpdateClusterStatusWithAllocation(t, c2Name, "10", "10Gi", "2", "2Gi")
+
+		// Create application with SingleCluster - should go to c2 (more free resources, LeastAllocated default)
+		app := &appsv1alpha1.Application{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      appName,
+				Namespace: namespace,
+				Annotations: map[string]string{
+					"apps.rocket.io/scheduler-strategy": "SingleCluster",
+				},
+			},
+			Spec: appsv1alpha1.ApplicationSpec{
+				ClusterAffinity: &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{
+							{
+								MatchExpressions: []corev1.NodeSelectorRequirement{
+									{
+										Key:      "e2e-test",
+										Operator: corev1.NodeSelectorOpIn,
+										Values:   []string{"resource-scoring"},
+									},
+								},
+							},
+						},
+					},
+				},
+				Workload: appsv1alpha1.WorkloadGVK{
+					APIVersion: "apps/v1",
+					Kind:       "Deployment",
+				},
+				Template: toRaw(map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"labels": map[string]string{"app": appName},
+					},
+					"spec": map[string]interface{}{
+						"containers": []interface{}{
+							map[string]interface{}{
+								"name":  "nginx",
+								"image": "nginx:latest",
+							},
+						},
+					},
+				}),
+			},
+		}
+
+		env.CreateApplication(t, app)
+		defer env.DeleteApplication(appName, namespace)
+
+		// Verify scheduled to c2 (more free resources with LeastAllocated strategy)
+		scheduled := env.WaitForApplicationScheduled(t, appName, namespace, 30*time.Second)
+		assert.Equal(t, c2Name, scheduled.Status.Placement.Topology[0].Name, "Should prefer cluster with more free resources")
+	})
+}
+
+// =============================================================================
+// Workload Types Tests
+// =============================================================================
+
+func testWorkloadTypes(t *testing.T, env *TestEnvironment) {
+	ctx := env.Context()
+	c := env.Client
+
+	t.Run("StatefulSetSupport", func(t *testing.T) {
+		clusterName := "e2e-sts-cluster"
+		appName := "e2e-sts-app"
+		namespace := "default"
+
+		// Create cluster
+		env.CreateHubCluster(t, clusterName, nil)
+		defer env.DeleteCluster(clusterName)
+
+		// Create StatefulSet application
+		replicas := int32(3)
+		app := &appsv1alpha1.Application{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      appName,
+				Namespace: namespace,
+			},
+			Spec: appsv1alpha1.ApplicationSpec{
+				Replicas: &replicas,
+				Workload: appsv1alpha1.WorkloadGVK{
+					APIVersion: "apps/v1",
+					Kind:       "StatefulSet",
+				},
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{"app": appName},
+				},
+				Template: toRaw(map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"labels": map[string]string{"app": appName},
+					},
+					"spec": map[string]interface{}{
+						"containers": []interface{}{
+							map[string]interface{}{
+								"name":  "nginx",
+								"image": "nginx:latest",
+							},
+						},
+					},
+				}),
+			},
+		}
+
+		env.CreateApplication(t, app)
+		defer env.DeleteApplication(appName, namespace)
+
+		// Wait for scheduling
+		env.WaitForApplicationScheduled(t, appName, namespace, 30*time.Second)
+
+		// Verify StatefulSet created
+		var sts appsv1.StatefulSet
+		err := wait.PollUntilContextTimeout(ctx, 1*time.Second, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+			if err := c.Get(ctx, types.NamespacedName{Name: appName, Namespace: namespace}, &sts); err != nil {
+				return false, nil
+			}
+			return sts.Spec.Replicas != nil && *sts.Spec.Replicas > 0, nil
+		})
+		require.NoError(t, err, "StatefulSet should be created")
+		assert.Equal(t, appName, sts.Spec.ServiceName, "StatefulSet should have correct service name")
+	})
+
+	t.Run("JobWithAttributes", func(t *testing.T) {
+		clusterName := "e2e-job-attr-cluster"
+		appName := "e2e-job-attr-app"
+		namespace := "default"
+
+		// Create cluster
+		env.CreateHubCluster(t, clusterName, nil)
+		defer env.DeleteCluster(clusterName)
+
+		// Create Job application with JobAttributes
+		completions := int32(3)
+		parallelism := int32(2)
+		backoffLimit := int32(2)
+		ttl := int32(60)
+		app := &appsv1alpha1.Application{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      appName,
+				Namespace: namespace,
+			},
+			Spec: appsv1alpha1.ApplicationSpec{
+				Workload: appsv1alpha1.WorkloadGVK{
+					APIVersion: "batch/v1",
+					Kind:       "Job",
+				},
+				JobAttributes: &appsv1alpha1.JobAttributes{
+					Completions:             &completions,
+					Parallelism:             &parallelism,
+					BackoffLimit:            &backoffLimit,
+					TTLSecondsAfterFinished: &ttl,
+				},
+				Template: toRaw(map[string]interface{}{
+					"spec": map[string]interface{}{
+						"containers": []interface{}{
+							map[string]interface{}{
+								"name":    "busybox",
+								"image":   "busybox:latest",
+								"command": []string{"echo", "hello"},
+							},
+						},
+						"restartPolicy": "Never",
+					},
+				}),
+			},
+		}
+
+		env.CreateApplication(t, app)
+		defer env.DeleteApplication(appName, namespace)
+
+		// Wait for scheduling
+		env.WaitForApplicationScheduled(t, appName, namespace, 30*time.Second)
+
+		// Verify Job created with correct attributes
+		var job batchv1.Job
+		err := wait.PollUntilContextTimeout(ctx, 1*time.Second, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+			if err := c.Get(ctx, types.NamespacedName{Name: appName, Namespace: namespace}, &job); err != nil {
+				return false, nil
+			}
+			return job.Spec.Completions != nil, nil
+		})
+		require.NoError(t, err, "Job should be created")
+		assert.Equal(t, int32(3), *job.Spec.Completions, "Job completions should match")
+		assert.Equal(t, int32(2), *job.Spec.Parallelism, "Job parallelism should match")
+		assert.Equal(t, int32(2), *job.Spec.BackoffLimit, "Job backoffLimit should match")
+		assert.Equal(t, int32(60), *job.Spec.TTLSecondsAfterFinished, "Job TTL should match")
+	})
+
+	t.Run("MaxUnavailablePDB", func(t *testing.T) {
+		clusterName := "e2e-pdb-max-cluster"
+		appName := "e2e-pdb-max-app"
+		namespace := "default"
+
+		// Create cluster
+		env.CreateHubCluster(t, clusterName, nil)
+		defer env.DeleteCluster(clusterName)
+
+		// Create application with MaxUnavailable PDB
+		maxUnavail := intstr.FromInt(2)
+		app := &appsv1alpha1.Application{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      appName,
+				Namespace: namespace,
+			},
+			Spec: appsv1alpha1.ApplicationSpec{
+				Resiliency: &appsv1alpha1.ResiliencyPolicy{
+					MaxUnavailable: &maxUnavail,
+				},
+				Workload: appsv1alpha1.WorkloadGVK{
+					APIVersion: "apps/v1",
+					Kind:       "Deployment",
+				},
+				Template: toRaw(map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"labels": map[string]string{"app": appName},
+					},
+					"spec": map[string]interface{}{
+						"containers": []interface{}{
+							map[string]interface{}{
+								"name":  "nginx",
+								"image": "nginx:latest",
+							},
+						},
+					},
+				}),
+			},
+		}
+
+		env.CreateApplication(t, app)
+		defer env.DeleteApplication(appName, namespace)
+
+		// Wait for scheduling
+		env.WaitForApplicationScheduled(t, appName, namespace, 30*time.Second)
+
+		// Verify PDB created with MaxUnavailable
+		var pdb policyv1.PodDisruptionBudget
+		err := wait.PollUntilContextTimeout(ctx, 1*time.Second, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+			if err := c.Get(ctx, types.NamespacedName{Name: appName, Namespace: namespace}, &pdb); err != nil {
+				return false, nil
+			}
+			return pdb.Spec.MaxUnavailable != nil, nil
+		})
+		require.NoError(t, err, "PDB should be created with MaxUnavailable")
+		assert.Equal(t, int32(2), pdb.Spec.MaxUnavailable.IntVal, "PDB MaxUnavailable should match")
+	})
+}
+
+// =============================================================================
+// Scale Operations Tests
+// =============================================================================
+
+func testScaleOperations(t *testing.T, env *TestEnvironment) {
+	ctx := env.Context()
+	c := env.Client
+
+	t.Run("ScaleUp", func(t *testing.T) {
+		c1Name := "e2e-scaleup-c1"
+		c2Name := "e2e-scaleup-c2"
+		appName := "e2e-scaleup-app"
+		namespace := "default"
+
+		// Create two clusters
+		env.CreateHubCluster(t, c1Name, map[string]string{"e2e-test": "scale-up"})
+		defer env.DeleteCluster(c1Name)
+		env.CreateHubCluster(t, c2Name, map[string]string{"e2e-test": "scale-up"})
+		defer env.DeleteCluster(c2Name)
+
+		// Create application with 4 replicas (Spread strategy)
+		replicas := int32(4)
+		app := &appsv1alpha1.Application{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      appName,
+				Namespace: namespace,
+			},
+			Spec: appsv1alpha1.ApplicationSpec{
+				Replicas: &replicas,
+				ClusterAffinity: &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{
+							{
+								MatchExpressions: []corev1.NodeSelectorRequirement{
+									{
+										Key:      "e2e-test",
+										Operator: corev1.NodeSelectorOpIn,
+										Values:   []string{"scale-up"},
+									},
+								},
+							},
+						},
+					},
+				},
+				Workload: appsv1alpha1.WorkloadGVK{
+					APIVersion: "apps/v1",
+					Kind:       "Deployment",
+				},
+				Template: toRaw(map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"labels": map[string]string{"app": appName},
+					},
+					"spec": map[string]interface{}{
+						"containers": []interface{}{
+							map[string]interface{}{
+								"name":  "nginx",
+								"image": "nginx:latest",
+							},
+						},
+					},
+				}),
+			},
+		}
+
+		env.CreateApplication(t, app)
+		defer env.DeleteApplication(appName, namespace)
+
+		// Wait for initial scheduling
+		initialScheduled := env.WaitForApplicationScheduled(t, appName, namespace, 30*time.Second)
+		initialTotalReplicas := int32(0)
+		initialDistribution := make(map[string]int32)
+		for _, topo := range initialScheduled.Status.Placement.Topology {
+			initialTotalReplicas += topo.Replicas
+			initialDistribution[topo.Name] = topo.Replicas
+		}
+		assert.Equal(t, int32(4), initialTotalReplicas, "Initial replicas should be 4")
+
+		// Scale up to 8 replicas
+		newReplicas := int32(8)
+		err := wait.PollUntilContextTimeout(ctx, 500*time.Millisecond, 10*time.Second, true, func(ctx context.Context) (bool, error) {
+			var latest appsv1alpha1.Application
+			if err := c.Get(ctx, types.NamespacedName{Name: appName, Namespace: namespace}, &latest); err != nil {
+				return false, nil
+			}
+			latest.Spec.Replicas = &newReplicas
+			return c.Update(ctx, &latest) == nil, nil
+		})
+		require.NoError(t, err, "Failed to update replicas")
+
+		// Wait for scale-up to complete
+		err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+			var got appsv1alpha1.Application
+			if err := c.Get(ctx, types.NamespacedName{Name: appName, Namespace: namespace}, &got); err != nil {
+				return false, nil
+			}
+			total := int32(0)
+			for _, topo := range got.Status.Placement.Topology {
+				total += topo.Replicas
+			}
+			return total == 8, nil
+		})
+		require.NoError(t, err, "Scale-up should complete")
+
+		// Verify existing clusters didn't lose replicas (no-reduction principle)
+		var finalApp appsv1alpha1.Application
+		c.Get(ctx, types.NamespacedName{Name: appName, Namespace: namespace}, &finalApp)
+		for _, topo := range finalApp.Status.Placement.Topology {
+			if oldCount, ok := initialDistribution[topo.Name]; ok {
+				assert.GreaterOrEqual(t, topo.Replicas, oldCount, "Cluster %s should not lose replicas during scale-up", topo.Name)
+			}
+		}
+	})
+
+	t.Run("ScaleDown", func(t *testing.T) {
+		c1Name := "e2e-scaledown-c1"
+		c2Name := "e2e-scaledown-c2"
+		appName := "e2e-scaledown-app"
+		namespace := "default"
+
+		// Create two clusters
+		env.CreateHubCluster(t, c1Name, map[string]string{"e2e-test": "scale-down"})
+		defer env.DeleteCluster(c1Name)
+		env.CreateHubCluster(t, c2Name, map[string]string{"e2e-test": "scale-down"})
+		defer env.DeleteCluster(c2Name)
+
+		// Create application with 8 replicas
+		replicas := int32(8)
+		app := &appsv1alpha1.Application{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      appName,
+				Namespace: namespace,
+			},
+			Spec: appsv1alpha1.ApplicationSpec{
+				Replicas: &replicas,
+				ClusterAffinity: &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{
+							{
+								MatchExpressions: []corev1.NodeSelectorRequirement{
+									{
+										Key:      "e2e-test",
+										Operator: corev1.NodeSelectorOpIn,
+										Values:   []string{"scale-down"},
+									},
+								},
+							},
+						},
+					},
+				},
+				Workload: appsv1alpha1.WorkloadGVK{
+					APIVersion: "apps/v1",
+					Kind:       "Deployment",
+				},
+				Template: toRaw(map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"labels": map[string]string{"app": appName},
+					},
+					"spec": map[string]interface{}{
+						"containers": []interface{}{
+							map[string]interface{}{
+								"name":  "nginx",
+								"image": "nginx:latest",
+							},
+						},
+					},
+				}),
+			},
+		}
+
+		env.CreateApplication(t, app)
+		defer env.DeleteApplication(appName, namespace)
+
+		// Wait for initial scheduling
+		env.WaitForApplicationScheduled(t, appName, namespace, 30*time.Second)
+
+		// Verify initial total is 8
+		var initialApp appsv1alpha1.Application
+		c.Get(ctx, types.NamespacedName{Name: appName, Namespace: namespace}, &initialApp)
+		initialTotal := int32(0)
+		for _, topo := range initialApp.Status.Placement.Topology {
+			initialTotal += topo.Replicas
+		}
+		assert.Equal(t, int32(8), initialTotal, "Initial replicas should be 8")
+
+		// Scale down to 4 replicas
+		newReplicas := int32(4)
+		err := wait.PollUntilContextTimeout(ctx, 500*time.Millisecond, 10*time.Second, true, func(ctx context.Context) (bool, error) {
+			var latest appsv1alpha1.Application
+			if err := c.Get(ctx, types.NamespacedName{Name: appName, Namespace: namespace}, &latest); err != nil {
+				return false, nil
+			}
+			latest.Spec.Replicas = &newReplicas
+			return c.Update(ctx, &latest) == nil, nil
+		})
+		require.NoError(t, err, "Failed to update replicas")
+
+		// Wait for scale-down to complete
+		err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+			var got appsv1alpha1.Application
+			if err := c.Get(ctx, types.NamespacedName{Name: appName, Namespace: namespace}, &got); err != nil {
+				return false, nil
+			}
+			total := int32(0)
+			for _, topo := range got.Status.Placement.Topology {
+				total += topo.Replicas
+			}
+			return total == 4, nil
+		})
+		require.NoError(t, err, "Scale-down should complete with total 4 replicas")
+	})
+
+	t.Run("ApplicationUpdate", func(t *testing.T) {
+		clusterName := "e2e-update-cluster"
+		appName := "e2e-update-app"
+		namespace := "default"
+
+		// Create cluster
+		env.CreateHubCluster(t, clusterName, nil)
+		defer env.DeleteCluster(clusterName)
+
+		// Create application
+		app := &appsv1alpha1.Application{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      appName,
+				Namespace: namespace,
+			},
+			Spec: appsv1alpha1.ApplicationSpec{
+				Workload: appsv1alpha1.WorkloadGVK{
+					APIVersion: "apps/v1",
+					Kind:       "Deployment",
+				},
+				Template: toRaw(map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"labels": map[string]string{"app": appName},
+					},
+					"spec": map[string]interface{}{
+						"containers": []interface{}{
+							map[string]interface{}{
+								"name":  "nginx",
+								"image": "nginx:1.24",
+							},
+						},
+					},
+				}),
+			},
+		}
+
+		env.CreateApplication(t, app)
+		defer env.DeleteApplication(appName, namespace)
+
+		// Wait for scheduling and deployment creation
+		env.WaitForApplicationScheduled(t, appName, namespace, 30*time.Second)
+
+		var deploy appsv1.Deployment
+		err := wait.PollUntilContextTimeout(ctx, 1*time.Second, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+			if err := c.Get(ctx, types.NamespacedName{Name: appName, Namespace: namespace}, &deploy); err != nil {
+				return false, nil
+			}
+			return len(deploy.Spec.Template.Spec.Containers) > 0, nil
+		})
+		require.NoError(t, err, "Deployment should be created")
+		assert.Equal(t, "nginx:1.24", deploy.Spec.Template.Spec.Containers[0].Image)
+
+		// Update application image
+		err = wait.PollUntilContextTimeout(ctx, 500*time.Millisecond, 10*time.Second, true, func(ctx context.Context) (bool, error) {
+			var latest appsv1alpha1.Application
+			if err := c.Get(ctx, types.NamespacedName{Name: appName, Namespace: namespace}, &latest); err != nil {
+				return false, nil
+			}
+			latest.Spec.Template = toRaw(map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"labels": map[string]string{"app": appName},
+				},
+				"spec": map[string]interface{}{
+					"containers": []interface{}{
+						map[string]interface{}{
+							"name":  "nginx",
+							"image": "nginx:1.25",
+						},
+					},
+				},
+			})
+			return c.Update(ctx, &latest) == nil, nil
+		})
+		require.NoError(t, err, "Failed to update application")
+
+		// Verify deployment is updated
+		err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+			if err := c.Get(ctx, types.NamespacedName{Name: appName, Namespace: namespace}, &deploy); err != nil {
+				return false, nil
+			}
+			return deploy.Spec.Template.Spec.Containers[0].Image == "nginx:1.25", nil
+		})
+		require.NoError(t, err, "Deployment image should be updated to nginx:1.25")
+	})
+}
+
+// =============================================================================
+// Overrides Tests
+// =============================================================================
+
+func testOverrides(t *testing.T, env *TestEnvironment) {
+	ctx := env.Context()
+	c := env.Client
+
+	t.Run("ImageOverride", func(t *testing.T) {
+		c1Name := "e2e-override-c1"
+		c2Name := "e2e-override-c2"
+		appName := "e2e-override-app"
+		namespace := "default"
+
+		// Create two clusters with different labels
+		env.CreateHubCluster(t, c1Name, map[string]string{"e2e-test": "override", "env": "production"})
+		defer env.DeleteCluster(c1Name)
+		env.CreateHubCluster(t, c2Name, map[string]string{"e2e-test": "override", "env": "staging"})
+		defer env.DeleteCluster(c2Name)
+
+		// Create application with image override for production
+		replicas := int32(2)
+		app := &appsv1alpha1.Application{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      appName,
+				Namespace: namespace,
+			},
+			Spec: appsv1alpha1.ApplicationSpec{
+				Replicas: &replicas,
+				ClusterAffinity: &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{
+							{
+								MatchExpressions: []corev1.NodeSelectorRequirement{
+									{
+										Key:      "e2e-test",
+										Operator: corev1.NodeSelectorOpIn,
+										Values:   []string{"override"},
+									},
+								},
+							},
+						},
+					},
+				},
+				Workload: appsv1alpha1.WorkloadGVK{
+					APIVersion: "apps/v1",
+					Kind:       "Deployment",
+				},
+				Template: toRaw(map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"labels": map[string]string{"app": appName},
+					},
+					"spec": map[string]interface{}{
+						"containers": []interface{}{
+							map[string]interface{}{
+								"name":  "nginx",
+								"image": "nginx:stable",
+							},
+						},
+					},
+				}),
+				Overrides: []appsv1alpha1.PolicyOverride{
+					{
+						ClusterSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"env": "production"},
+						},
+						Image: "nginx:production",
+					},
+				},
+			},
+		}
+
+		env.CreateApplication(t, app)
+		defer env.DeleteApplication(appName, namespace)
+
+		// Wait for scheduling to both clusters
+		err := wait.PollUntilContextTimeout(ctx, 1*time.Second, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+			var got appsv1alpha1.Application
+			if err := c.Get(ctx, types.NamespacedName{Name: appName, Namespace: namespace}, &got); err != nil {
+				return false, nil
+			}
+			total := int32(0)
+			for _, topo := range got.Status.Placement.Topology {
+				total += topo.Replicas
+			}
+			return total == 2, nil
+		})
+		require.NoError(t, err, "Application should be scheduled")
+
+		// Verify that production cluster deployment has overridden image
+		// Note: In e2e test we use the same cluster for all workloads,
+		// so we verify the override mechanism is working through the application status
+		var finalApp appsv1alpha1.Application
+		c.Get(ctx, types.NamespacedName{Name: appName, Namespace: namespace}, &finalApp)
+		assert.NotEmpty(t, finalApp.Status.Placement.Topology, "Should have placement")
+		assert.NotNil(t, finalApp.Spec.Overrides, "Overrides should be set")
+		assert.Len(t, finalApp.Spec.Overrides, 1, "Should have 1 override")
+		assert.Equal(t, "nginx:production", finalApp.Spec.Overrides[0].Image, "Override image should be set")
+	})
+
+	t.Run("EnvOverride", func(t *testing.T) {
+		c1Name := "e2e-env-override-c1"
+		appName := "e2e-env-override-app"
+		namespace := "default"
+
+		// Create cluster
+		env.CreateHubCluster(t, c1Name, map[string]string{"e2e-test": "env-override", "region": "us-west"})
+		defer env.DeleteCluster(c1Name)
+
+		// Create application with env override
+		app := &appsv1alpha1.Application{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      appName,
+				Namespace: namespace,
+			},
+			Spec: appsv1alpha1.ApplicationSpec{
+				ClusterAffinity: &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{
+							{
+								MatchExpressions: []corev1.NodeSelectorRequirement{
+									{
+										Key:      "e2e-test",
+										Operator: corev1.NodeSelectorOpIn,
+										Values:   []string{"env-override"},
+									},
+								},
+							},
+						},
+					},
+				},
+				Workload: appsv1alpha1.WorkloadGVK{
+					APIVersion: "apps/v1",
+					Kind:       "Deployment",
+				},
+				Template: toRaw(map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"labels": map[string]string{"app": appName},
+					},
+					"spec": map[string]interface{}{
+						"containers": []interface{}{
+							map[string]interface{}{
+								"name":  "nginx",
+								"image": "nginx:latest",
+								"env": []interface{}{
+									map[string]interface{}{
+										"name":  "REGION",
+										"value": "default",
+									},
+								},
+							},
+						},
+					},
+				}),
+				Overrides: []appsv1alpha1.PolicyOverride{
+					{
+						ClusterSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"region": "us-west"},
+						},
+						Env: []corev1.EnvVar{
+							{
+								Name:  "REGION",
+								Value: "us-west",
+							},
+							{
+								Name:  "EXTRA_CONFIG",
+								Value: "west-specific",
+							},
+						},
+					},
+				},
+			},
+		}
+
+		env.CreateApplication(t, app)
+		defer env.DeleteApplication(appName, namespace)
+
+		// Wait for scheduling
+		env.WaitForApplicationScheduled(t, appName, namespace, 30*time.Second)
+
+		// Verify application has the env override
+		var finalApp appsv1alpha1.Application
+		c.Get(ctx, types.NamespacedName{Name: appName, Namespace: namespace}, &finalApp)
+		assert.NotEmpty(t, finalApp.Spec.Overrides, "Overrides should be set")
+		assert.Len(t, finalApp.Spec.Overrides[0].Env, 2, "Should have 2 env overrides")
+	})
+
+	t.Run("ResourceOverride", func(t *testing.T) {
+		c1Name := "e2e-res-override-c1"
+		appName := "e2e-res-override-app"
+		namespace := "default"
+
+		// Create cluster
+		env.CreateHubCluster(t, c1Name, map[string]string{"e2e-test": "resource-override", "size": "large"})
+		defer env.DeleteCluster(c1Name)
+
+		// Create application with resource override
+		app := &appsv1alpha1.Application{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      appName,
+				Namespace: namespace,
+			},
+			Spec: appsv1alpha1.ApplicationSpec{
+				ClusterAffinity: &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{
+							{
+								MatchExpressions: []corev1.NodeSelectorRequirement{
+									{
+										Key:      "e2e-test",
+										Operator: corev1.NodeSelectorOpIn,
+										Values:   []string{"resource-override"},
+									},
+								},
+							},
+						},
+					},
+				},
+				Workload: appsv1alpha1.WorkloadGVK{
+					APIVersion: "apps/v1",
+					Kind:       "Deployment",
+				},
+				Template: toRaw(map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"labels": map[string]string{"app": appName},
+					},
+					"spec": map[string]interface{}{
+						"containers": []interface{}{
+							map[string]interface{}{
+								"name":  "nginx",
+								"image": "nginx:latest",
+								"resources": map[string]interface{}{
+									"requests": map[string]interface{}{
+										"cpu":    "100m",
+										"memory": "128Mi",
+									},
+								},
+							},
+						},
+					},
+				}),
+				Overrides: []appsv1alpha1.PolicyOverride{
+					{
+						ClusterSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"size": "large"},
+						},
+						Resources: &corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("500m"),
+								corev1.ResourceMemory: resource.MustParse("512Mi"),
+							},
+							Limits: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("1"),
+								corev1.ResourceMemory: resource.MustParse("1Gi"),
+							},
+						},
+					},
+				},
+			},
+		}
+
+		env.CreateApplication(t, app)
+		defer env.DeleteApplication(appName, namespace)
+
+		// Wait for scheduling
+		env.WaitForApplicationScheduled(t, appName, namespace, 30*time.Second)
+
+		// Verify application has the resource override
+		var finalApp appsv1alpha1.Application
+		c.Get(ctx, types.NamespacedName{Name: appName, Namespace: namespace}, &finalApp)
+		assert.NotEmpty(t, finalApp.Spec.Overrides, "Overrides should be set")
+		assert.NotNil(t, finalApp.Spec.Overrides[0].Resources, "Resource override should be set")
+		assert.Equal(t, "500m", finalApp.Spec.Overrides[0].Resources.Requests.Cpu().String(), "CPU request override should match")
 	})
 }

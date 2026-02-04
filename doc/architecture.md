@@ -135,15 +135,23 @@ The Scheduler adopts a plugin-based architecture similar to Kubernetes Scheduler
 
 **Scheduling Phases:**
 
-| Phase | Description | Plugin Examples |
-|-------|-------------|-----------------|
-| **PreFilter** | Pre-filtering, prepare scheduling context | ClusterAffinity |
-| **Filter** | Filter out clusters that don't meet requirements | ClusterState, ResourceFit |
-| **PostFilter** | Post-filter processing | - |
-| **PreScore** | Pre-scoring preparation | TopologySpread |
-| **Score** | Score candidate clusters | MostAllocated, LeastAllocated |
-| **NormalizeScore** | Normalize scores (0-100) | - |
-| **Select** | Final cluster selection | Spread, BinPacking |
+| Phase | Description | Built-in Plugins |
+|-------|-------------|------------------|
+| **Filter** | Filter out clusters that don't meet requirements | Health, Affinity, TaintToleration, Capacity, VolumeRestriction |
+| **Score** | Score candidate clusters (0-100) | Affinity, Resource (LeastAllocated/MostAllocated), TopologySpread |
+| **Select** | Final cluster selection based on strategy | SingleCluster, Spread |
+
+**Built-in Plugins:**
+
+| Plugin | Phase | Description |
+|--------|-------|-------------|
+| Health | Filter | Exclude clusters that are NotReady or disconnected |
+| Affinity | Filter/Score | Filter by required affinity, score by preferred affinity |
+| TaintToleration | Filter | Check if cluster taints are tolerated by application |
+| Capacity | Filter | Check if cluster has sufficient resources |
+| VolumeRestriction | Filter | Check if cluster supports required storage types |
+| Resource | Score | Score by resource utilization (LeastAllocated/MostAllocated strategies) |
+| TopologySpread | Score | Prefer topology domains with fewer replicas (optional, disabled by default) |
 
 **Data Structures:**
 
