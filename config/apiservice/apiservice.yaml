@@ -1,0 +1,13 @@
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1alpha1.cluster.rocket.io
+spec:
+  group: cluster.rocket.io
+  groupPriorityMinimum: 1000
+  service:
+    name: rocket-manager-webhook-service
+    namespace: rocket-system
+  version: v1alpha1
+  versionPriority: 10

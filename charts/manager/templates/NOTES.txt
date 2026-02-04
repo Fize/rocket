@@ -1,0 +1,37 @@
+Rocket Manager has been deployed!
+
+IMPORTANT: CRD Installation Notes
+---------------------------------
+The following CRDs should be installed BEFORE deploying this chart:
+  - applications.apps.rocket.io
+  - managedclusters.storage.rocket.io
+  - workspaces.workspace.rocket.io
+
+The following CRDs should NOT be installed (they conflict with the aggregated APIService):
+  - clusters.cluster.rocket.io (virtual Cluster API is provided by the aggregated APIServer)
+
+Install CRDs:
+  kubectl apply -f config/crd/bases/apps.rocket.io_applications.yaml
+  kubectl apply -f config/crd/bases/storage.rocket.io_managedclusters.yaml
+  kubectl apply -f config/crd/bases/workspace.rocket.io_workspaces.yaml
+
+Getting Started
+---------------
+Get information about the deployed Clusters (via aggregated API):
+  kubectl get clusters.cluster.rocket.io
+
+Get information about the deployed ManagedClusters (backend storage):
+  kubectl get managedclusters.storage.rocket.io
+
+Get information about the deployed Workspaces:
+  kubectl get workspaces.workspace.rocket.io
+
+Get information about the deployed Applications:
+  kubectl get applications.apps.rocket.io [--namespace <namespace>]
+
+Verify APIService is working:
+  kubectl get apiservice v1alpha1.cluster.rocket.io
+  # Should show: SERVICE = {{ .Release.Namespace }}/{{ include "manager.fullname" . }}-webhook
+
+For more information on running Rocket, visit:
+https://github.com/Hex-Techs/rocket

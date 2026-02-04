@@ -1,0 +1,80 @@
+# Default values for manager.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+image:
+  repository: rocket
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "latest"
+
+enabledControllers: ""
+
+disabledWebhook: true
+
+disabledAPIServer: false
+
+logLevel: 5
+logEncoder: json
+
+tunnelPort: 5443
+
+# APIService configuration
+# The aggregated APIServer provides virtual Cluster resources (cluster.rocket.io/v1alpha1)
+# backed by ManagedCluster CRDs (storage.rocket.io/v1alpha1)
+# Set to true to skip TLS verification (for development/testing)
+insecureSkipTLSVerify: true
+# CA bundle for the APIService (base64 encoded). If not set, insecureSkipTLSVerify should be true
+# caBundle: ""
+
+bootstrap:
+  id: 07401b
+  secret: f395accd246ae52d
+  expiration: 2030-09-27T07:26:11Z
+
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+resources:
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  limits:
+    cpu: 1
+    memory: 1Gi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "manager.fullname" . }}-metric
+  labels:
+    {{- include "manager.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+  - name: https
+    port: 8443
+    protocol: TCP
+    targetPort: https
+  selector:
+    {{- include "manager.selectorLabels" . | nindent 4 }}

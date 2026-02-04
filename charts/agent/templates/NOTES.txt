@@ -1,0 +1,2 @@
+For more information on running Rocket, visit:
+https://github.com/Hex-Techs/rocket

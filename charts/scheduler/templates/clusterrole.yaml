@@ -1,0 +1,40 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rocket:scheduler
+rules:
+- apiGroups:
+  - apps
+  resources:
+  - controllerrevisions
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - rocket.hextech.io
+  resources:
+  - clusters
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - rocket.hextech.io
+  resources:
+  - applications
+  verbs:
+  - get
+  - list
+  - watch
+  - update
+- apiGroups:
+  - rocket.hextech.io
+  resources:
+  - applications/status
+  verbs:
+  - list
+  - watch
+  - get
+  - patch
+  - update

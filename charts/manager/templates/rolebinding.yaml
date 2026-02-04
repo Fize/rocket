@@ -1,0 +1,12 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rocket:manager:leader-election
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: rocket:manager:leader-election
+subjects:
+- kind: ServiceAccount
+  name: {{ include "manager.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}

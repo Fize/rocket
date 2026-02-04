@@ -1,0 +1,25 @@
+# This APIService registers the aggregated API for cluster.rocket.io/v1alpha1
+# The aggregated APIServer provides virtual Cluster resources backed by ManagedCluster CRDs
+# IMPORTANT: Do NOT install the clusters.cluster.rocket.io CRD, as it conflicts with this APIService
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1alpha1.cluster.rocket.io
+  labels:
+    {{- include "manager.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "10"
+spec:
+  group: cluster.rocket.io
+  groupPriorityMinimum: 2000
+  versionPriority: 100
+  service:
+    name: {{ include "manager.fullname" . }}-webhook
+    namespace: {{ .Release.Namespace }}
+    port: 443
+  version: v1alpha1
+  {{- if .Values.caBundle }}
+  caBundle: {{ .Values.caBundle }}
+  {{- end }}
+  insecureSkipTLSVerify: {{ .Values.insecureSkipTLSVerify | default true }}
