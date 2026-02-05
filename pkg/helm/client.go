@@ -52,6 +52,11 @@ func NewClientInCluster(namespace string) (*Client, error) {
 }
 
 func (c *Client) InstallOrUpgrade(releaseName string, chartPath string, values map[string]interface{}) (*release.Release, error) {
+	resolvedChartPath, err := c.resolveChartPath(chartPath)
+	if err != nil {
+		return nil, err
+	}
+
 	histClient := action.NewHistory(c.cfg)
 	histClient.Max = 1
 	if _, err := histClient.Run(releaseName); err == nil {
@@ -62,7 +67,7 @@ func (c *Client) InstallOrUpgrade(releaseName string, chartPath string, values m
 		client.Wait = true
 		client.Timeout = 5 * time.Minute
 
-		ch, err := loader.Load(chartPath)
+		ch, err := loader.Load(resolvedChartPath)
 		if err != nil {
 			return nil, err
 		}
@@ -78,12 +83,17 @@ func (c *Client) InstallOrUpgrade(releaseName string, chartPath string, values m
 	client.Wait = true
 	client.Timeout = 5 * time.Minute
 
-	ch, err := loader.Load(chartPath)
+	ch, err := loader.Load(resolvedChartPath)
 	if err != nil {
 		return nil, err
 	}
 
 	return client.Run(ch, values)
+}
+
+func (c *Client) resolveChartPath(chartPath string) (string, error) {
+	chartPathOptions := action.ChartPathOptions{}
+	return chartPathOptions.LocateChart(chartPath, c.settings)
 }
 
 func (c *Client) Uninstall(releaseName string) error {

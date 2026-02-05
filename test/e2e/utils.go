@@ -9,6 +9,7 @@ import (
 	appsv1alpha1 "github.com/hex-techs/rocket/pkg/apis/apps/v1alpha1"
 	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/cluster/v1alpha1"
 	storagev1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
+	workspacev1alpha1 "github.com/hex-techs/rocket/pkg/apis/workspace/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -21,6 +22,7 @@ func setupScheme() *runtime.Scheme {
 	_ = appsv1alpha1.AddToScheme(scheme)
 	_ = storagev1alpha1.AddToScheme(scheme)
 	_ = clusterv1alpha1.AddToScheme(scheme)
+	_ = workspacev1alpha1.AddToScheme(scheme)
 	return scheme
 }
 

@@ -15,6 +15,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -51,51 +52,9 @@ func TestGetBrokerInfo(t *testing.T) {
 			},
 		},
 		{
-			name: "Secret found via ServiceAccount",
-			existingObjs: []runtime.Object{
-				&corev1.ServiceAccount{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "submariner-k8s-broker-client",
-						Namespace: BrokerNamespace,
-					},
-					Secrets: []corev1.ObjectReference{
-						{Name: "sa-secret"},
-					},
-				},
-				&corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "sa-secret",
-						Namespace: BrokerNamespace,
-					},
-					Data: map[string][]byte{
-						"token":  []byte("sa-token"),
-						"ca.crt": []byte("sa-ca"),
-					},
-				},
-			},
-			expectedInfo: map[string]string{
-				"brokerURL":   "https://kubernetes.default.svc:443",
-				"brokerToken": "sa-token",
-				"brokerCA":    base64.StdEncoding.EncodeToString([]byte("sa-ca")),
-			},
-		},
-		{
-			name:          "No secret and no SA",
+			name:          "No secret",
 			existingObjs:  []runtime.Object{},
-			expectedError: "failed to find broker SA", // Matches the error when direct secret not found and SA not found
-		},
-		{
-			name: "SA exists but has no secrets",
-			existingObjs: []runtime.Object{
-				&corev1.ServiceAccount{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "submariner-k8s-broker-client",
-						Namespace: BrokerNamespace,
-					},
-					Secrets: []corev1.ObjectReference{},
-				},
-			},
-			expectedError: "broker SA has no secrets",
+			expectedError: "failed to get broker secret",
 		},
 	}
 
@@ -211,6 +170,8 @@ func TestManagerController_Reconcile_NeedUpdate(t *testing.T) {
 	mc := &ManagerController{
 		mgrClient: client,
 	}
+	mockHelm := helm.NewMockClient()
+	mc.SetHelmClient(mockHelm)
 
 	config := addon.AddonConfig{
 		ClusterName: "test-cluster",
@@ -221,17 +182,21 @@ func TestManagerController_Reconcile_NeedUpdate(t *testing.T) {
 		Client: client,
 	}
 
-	// This will fail because broker is not installed, but we test that getBrokerInfo works
-	// and the controller attempts to update the cluster config
 	err := mc.Reconcile(context.Background(), config)
-	// Expected error because helm installation will fail without charts
-	assert.Error(t, err)
+	assert.NoError(t, err)
+
+	var updated storagev1alpha1.ManagedCluster
+	require.NoError(t, client.Get(context.Background(), types.NamespacedName{Name: "test-cluster"}, &updated))
+	require.Len(t, updated.Spec.Addons, 1)
+	assert.Equal(t, "https://kubernetes.default.svc:443", updated.Spec.Addons[0].Config["brokerURL"])
+	assert.Equal(t, "new-token", updated.Spec.Addons[0].Config["brokerToken"])
+	assert.Equal(t, BrokerNamespace, updated.Spec.Addons[0].Config["brokerNamespace"])
 }
 
 func TestConstants(t *testing.T) {
 	assert.Equal(t, "mcs-lighthouse", AddonName)
 	assert.Equal(t, "submariner-k8s-broker", BrokerNamespace)
-	assert.Equal(t, "submariner-broker-client-secret", BrokerSecretName)
+	assert.Equal(t, "submariner-k8s-broker-client-token", BrokerSecretName)
 }
 
 // ============== New tests using mock Helm client ==============
@@ -252,13 +217,16 @@ func TestManagerController_EnsureBroker_Success(t *testing.T) {
 	}
 	mc.SetHelmClient(mockHelm)
 
-	err := mc.ensureBroker(context.Background())
+	err := mc.ensureBroker(context.Background(), addon.AddonConfig{
+		Config: map[string]string{},
+		Client: client,
+	})
 	assert.NoError(t, err)
 
 	// Verify helm was called correctly
 	require.Len(t, mockHelm.InstallOrUpgradeCalls, 1)
 	call := mockHelm.InstallOrUpgradeCalls[0]
-	assert.Equal(t, "submariner-broker", call.ReleaseName)
+	assert.Equal(t, "submariner-k8s-broker", call.ReleaseName)
 	assert.Contains(t, call.ChartPath, "submariner-k8s-broker")
 }
 
@@ -280,7 +248,10 @@ func TestManagerController_EnsureBroker_HelmError(t *testing.T) {
 	}
 	mc.SetHelmClient(mockHelm)
 
-	err := mc.ensureBroker(context.Background())
+	err := mc.ensureBroker(context.Background(), addon.AddonConfig{
+		Config: map[string]string{},
+		Client: client,
+	})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "helm install failed")
 }
@@ -415,6 +386,73 @@ func TestGetHelmClient_DefaultCreation(t *testing.T) {
 	assert.Equal(t, mockHelm, client)
 }
 
+func TestResolveChartURL_VersionOptional(t *testing.T) {
+	// Test that version can be omitted and defaults to "*" (latest)
+	tests := []struct {
+		name    string
+		cfg     chartURLConfig
+		want    string
+		wantErr bool
+	}{
+		{
+			name: "With explicit version",
+			cfg: chartURLConfig{
+				RepoURL:      "https://submariner-io.github.io/submariner-charts/charts",
+				ChartName:    "submariner-k8s-broker",
+				ChartVersion: "0.23.0-m0",
+			},
+			want: "https://submariner-io.github.io/submariner-charts/charts/submariner-k8s-broker-0.23.0-m0.tgz",
+		},
+		{
+			name: "Without version (uses latest)",
+			cfg: chartURLConfig{
+				RepoURL:      "https://submariner-io.github.io/submariner-charts/charts",
+				ChartName:    "submariner-k8s-broker",
+				ChartVersion: "",
+			},
+			want: "https://submariner-io.github.io/submariner-charts/charts/submariner-k8s-broker-*.tgz",
+		},
+		{
+			name: "With direct URL (ignores version)",
+			cfg: chartURLConfig{
+				URL:          "https://example.com/charts/my-chart.tgz",
+				ChartVersion: "1.0.0", // Should be ignored
+			},
+			want: "https://example.com/charts/my-chart.tgz",
+		},
+		{
+			name: "Missing chart name",
+			cfg: chartURLConfig{
+				RepoURL:      "https://submariner-io.github.io/submariner-charts/charts",
+				ChartName:    "",
+				ChartVersion: "0.23.0",
+			},
+			wantErr: true,
+		},
+		{
+			name: "Invalid repo URL",
+			cfg: chartURLConfig{
+				RepoURL:      "not-a-url",
+				ChartName:    "my-chart",
+				ChartVersion: "1.0.0",
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolveChartURL(tt.cfg)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.want, got)
+			}
+		})
+	}
+}
+
 func TestAgentController_GetHelmClient_DefaultCreation(t *testing.T) {
 	// Test that getHelmClient returns injected client when available
 	ac := &AgentController{}
@@ -424,4 +462,87 @@ func TestAgentController_GetHelmClient_DefaultCreation(t *testing.T) {
 	client, err := ac.getHelmClient("submariner-operator")
 	assert.NoError(t, err)
 	assert.Equal(t, mockHelm, client)
+}
+func TestManagerController_BrokerConfigChanged_Detection(t *testing.T) {
+	// Test that broker config changes are properly detected and trigger upgrade
+	mc := &ManagerController{}
+
+	// First reconciliation - should detect as changed (first time)
+	config1 := addon.AddonConfig{
+		Config: map[string]string{
+			ConfigBrokerChartVersion: "0.23.0-m0",
+		},
+	}
+	changed := mc.shouldUpdateBroker(config1.Config)
+	assert.True(t, changed, "should detect change on first reconciliation")
+
+	// Second reconciliation with same config - should still detect change
+	// because we haven't called updateLastBrokerConfig
+	changed = mc.shouldUpdateBroker(config1.Config)
+	assert.True(t, changed, "should still detect change when config hasn't been marked as applied")
+
+	// Third reconciliation with version change - should detect change
+	config2 := addon.AddonConfig{
+		Config: map[string]string{
+			ConfigBrokerChartVersion: "0.24.0", // Changed version
+		},
+	}
+	changed = mc.shouldUpdateBroker(config2.Config)
+	assert.True(t, changed, "should detect change when version updated")
+
+	// Fourth reconciliation with different repo - should detect change
+	config3 := addon.AddonConfig{
+		Config: map[string]string{
+			ConfigBrokerChartVersion: "0.24.0",
+			ConfigBrokerChartRepoURL: "https://custom-repo.example.com", // Changed repo
+		},
+	}
+	changed = mc.shouldUpdateBroker(config3.Config)
+	assert.True(t, changed, "should detect change when repo URL updated")
+}
+
+func TestAgentController_SubmarinerConfigChanged_Detection(t *testing.T) {
+	// Test that submariner config changes are properly detected and trigger upgrade
+	ac := &AgentController{}
+
+	// First reconciliation - should detect as changed (first time)
+	config1 := addon.AddonConfig{
+		Config: map[string]string{
+			ConfigSubmarinerChartVersion: "0.7.0",
+			"brokerURL":                  "https://broker.example.com",
+			"brokerToken":                "token123",
+		},
+	}
+	changed := ac.hasSubmarinerConfigChanged(config1.Config)
+	assert.True(t, changed, "should detect change on first reconciliation")
+
+	// Second reconciliation with same config - should not detect change
+	changed = ac.hasSubmarinerConfigChanged(config1.Config)
+	assert.False(t, changed, "should not detect change when config is same")
+
+	// Third reconciliation with chart version change - should detect change
+	config2 := addon.AddonConfig{
+		Config: map[string]string{
+			ConfigSubmarinerChartVersion: "0.8.0", // Changed version
+			"brokerURL":                  "https://broker.example.com",
+			"brokerToken":                "token123",
+		},
+	}
+	changed = ac.hasSubmarinerConfigChanged(config2.Config)
+	assert.True(t, changed, "should detect change when chart version updated")
+
+	// Fourth reconciliation with broker token change - should detect change
+	config3 := addon.AddonConfig{
+		Config: map[string]string{
+			ConfigSubmarinerChartVersion: "0.8.0",
+			"brokerURL":                  "https://broker.example.com",
+			"brokerToken":                "token456", // Changed token
+		},
+	}
+	changed = ac.hasSubmarinerConfigChanged(config3.Config)
+	assert.True(t, changed, "should detect change when broker token updated")
+
+	// Fifth reconciliation with same token - should not detect change
+	changed = ac.hasSubmarinerConfigChanged(config3.Config)
+	assert.False(t, changed, "should not detect change when config is same after update")
 }

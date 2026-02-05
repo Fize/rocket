@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hex-techs/rocket/internal/addon"
 	_ "github.com/hex-techs/rocket/internal/addon/mcs"
 	"github.com/hex-techs/rocket/internal/agent/cluster"
 	addoncontroller "github.com/hex-techs/rocket/internal/manager/addon"
@@ -28,8 +29,10 @@ import (
 	managercluster "github.com/hex-techs/rocket/internal/manager/cluster"
 	"github.com/hex-techs/rocket/internal/manager/scheduler"
 	"github.com/hex-techs/rocket/internal/manager/scheduler/cache"
+	"github.com/hex-techs/rocket/internal/manager/scheduler/framework"
 	"github.com/hex-techs/rocket/internal/manager/scheduler/queue"
 	"github.com/hex-techs/rocket/internal/manager/sharding"
+	"github.com/hex-techs/rocket/internal/manager/workspace"
 	appsv1alpha1 "github.com/hex-techs/rocket/pkg/apis/apps/v1alpha1"
 	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
 	"github.com/rancher/remotedialer"
@@ -106,11 +109,6 @@ func SetupTestEnvironment(t *testing.T) *TestEnvironment {
 func setupTestEnvironmentInternal(t *testing.T) (*TestEnvironment, error) {
 	ctrl.SetLogger(zap.New(zap.WriteTo(os.Stdout), zap.UseDevMode(true)))
 
-	// Check KUBECONFIG
-	if os.Getenv("KUBECONFIG") == "" {
-		return nil, fmt.Errorf("KUBECONFIG environment variable is not set")
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 
 	cfg, err := ctrl.GetConfig()
@@ -181,15 +179,37 @@ func setupTestEnvironmentInternal(t *testing.T) (*TestEnvironment, error) {
 	if err := (&addoncontroller.AddonReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Controllers: func() map[string]addon.AddonController {
+			controllers := map[string]addon.AddonController{}
+			for _, a := range addon.GetRegistry().List() {
+				ctrl, err := a.ManagerController(mgr)
+				if err != nil || ctrl == nil {
+					continue
+				}
+				controllers[a.Name()] = ctrl
+			}
+			return controllers
+		}(),
 	}).SetupWithManager(mgr); err != nil {
 		cancel()
 		return nil, fmt.Errorf("failed to setup addon reconciler: %w", err)
 	}
 
+	if err := (&workspace.WorkspaceReconciler{
+		Client:        mgr.GetClient(),
+		Scheme:        mgr.GetScheme(),
+		ClientManager: clientManager,
+	}).SetupWithManager(mgr); err != nil {
+		cancel()
+		return nil, fmt.Errorf("failed to setup workspace reconciler: %w", err)
+	}
+
 	// Setup scheduler
 	schedCache := cache.NewCache()
 	schedQueue := queue.NewSchedulingQueue()
-	sched := scheduler.NewScheduler(mgr.GetClient(), schedCache, schedQueue)
+	config := framework.DefaultSchedulerConfig()
+	config.ScorePlugins = append(config.ScorePlugins, framework.PluginConfig{Name: "TopologySpread", Enabled: true, Weight: 1})
+	sched := scheduler.NewSchedulerWithConfig(mgr.GetClient(), schedCache, schedQueue, config)
 
 	if err := mgr.Add(&runnableFunc{fn: func(ctx context.Context) error {
 		sched.Run(ctx)
@@ -651,6 +671,89 @@ func (e *TestEnvironment) WaitForApplicationScheduled(t *testing.T, name, namesp
 		t.Fatalf("Application %s/%s was not scheduled within %v", namespace, name, timeout)
 	}
 	return &app
+}
+
+// WaitForClusterState waits for a cluster to reach a specific state
+func (e *TestEnvironment) WaitForClusterState(t *testing.T, name string, state clusterv1alpha1.ClusterState, timeout time.Duration) *clusterv1alpha1.ManagedCluster {
+	ctx := e.Context()
+	var cluster clusterv1alpha1.ManagedCluster
+	err := wait.PollUntilContextTimeout(ctx, 500*time.Millisecond, timeout, true, func(ctx context.Context) (bool, error) {
+		if err := e.Client.Get(ctx, types.NamespacedName{Name: name}, &cluster); err != nil {
+			return false, nil
+		}
+		return cluster.Status.State == state, nil
+	})
+	if err != nil {
+		t.Fatalf("Cluster %s did not reach state %s within %v", name, state, timeout)
+	}
+	return &cluster
+}
+
+// WaitForClusterSecret waits for the Edge credentials secret to be created
+func (e *TestEnvironment) WaitForClusterSecret(t *testing.T, clusterName string, timeout time.Duration) *corev1.Secret {
+	ctx := e.Context()
+	secretName := fmt.Sprintf("cluster-creds-%s", clusterName)
+	var secret corev1.Secret
+	err := wait.PollUntilContextTimeout(ctx, 500*time.Millisecond, timeout, true, func(ctx context.Context) (bool, error) {
+		if err := e.Client.Get(ctx, types.NamespacedName{Name: secretName, Namespace: TestNamespace}, &secret); err != nil {
+			return false, nil
+		}
+		return len(secret.Data) > 0, nil
+	})
+	if err != nil {
+		t.Fatalf("Cluster secret %s was not created within %v", secretName, timeout)
+	}
+	return &secret
+}
+
+// PatchClusterAnnotations patches annotations on a ManagedCluster
+func (e *TestEnvironment) PatchClusterAnnotations(t *testing.T, name string, annotations map[string]string) {
+	ctx := e.Context()
+	err := wait.PollUntilContextTimeout(ctx, 200*time.Millisecond, 10*time.Second, true, func(ctx context.Context) (bool, error) {
+		var cluster clusterv1alpha1.ManagedCluster
+		if err := e.Client.Get(ctx, types.NamespacedName{Name: name}, &cluster); err != nil {
+			return false, nil
+		}
+		if cluster.Annotations == nil {
+			cluster.Annotations = map[string]string{}
+		}
+		for k, v := range annotations {
+			cluster.Annotations[k] = v
+		}
+		return e.Client.Update(ctx, &cluster) == nil, nil
+	})
+	if err != nil {
+		t.Fatalf("Failed to patch annotations for cluster %s: %v", name, err)
+	}
+}
+
+// CreateClusterSecret creates a secret in the test namespace for hub cluster auth
+func (e *TestEnvironment) CreateClusterSecret(t *testing.T, name string) *corev1.Secret {
+	ctx := e.Context()
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: TestNamespace,
+		},
+		Data: map[string][]byte{},
+	}
+	if e.Config.BearerToken != "" {
+		secret.Data["token"] = []byte(e.Config.BearerToken)
+	}
+	if e.Config.TLSClientConfig.CAData != nil {
+		secret.Data["caData"] = e.Config.TLSClientConfig.CAData
+	}
+	if e.Config.TLSClientConfig.CertData != nil {
+		secret.Data["certData"] = e.Config.TLSClientConfig.CertData
+	}
+	if e.Config.TLSClientConfig.KeyData != nil {
+		secret.Data["keyData"] = e.Config.TLSClientConfig.KeyData
+	}
+	_ = e.Client.Delete(ctx, secret)
+	if err := e.Client.Create(ctx, secret); err != nil {
+		t.Fatalf("Failed to create cluster secret %s: %v", name, err)
+	}
+	return secret
 }
 
 // runnableFunc wraps a function to implement the Runnable interface

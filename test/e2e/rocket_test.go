@@ -4,18 +4,25 @@ package e2e
 
 import (
 	"context"
+	"encoding/base64"
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/hex-techs/rocket/internal/addon"
+	"github.com/hex-techs/rocket/internal/addon/mcs"
 	appsv1alpha1 "github.com/hex-techs/rocket/pkg/apis/apps/v1alpha1"
 	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
+	workspacev1alpha1 "github.com/hex-techs/rocket/pkg/apis/workspace/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -32,10 +39,6 @@ func TestMain(m *testing.M) {
 
 // TestRocketE2E is the main test function that runs all e2e tests in a single environment
 func TestRocketE2E(t *testing.T) {
-	if os.Getenv("KUBECONFIG") == "" {
-		t.Skip("KUBECONFIG not set, skipping E2E tests")
-	}
-
 	// Setup shared test environment
 	env := SetupTestEnvironment(t)
 	defer env.Cleanup()
@@ -79,6 +82,46 @@ func TestRocketE2E(t *testing.T) {
 
 	t.Run("Overrides", func(t *testing.T) {
 		testOverrides(t, env)
+	})
+
+	t.Run("CredentialsManagement", func(t *testing.T) {
+		testCredentialsManagement(t, env)
+	})
+
+	t.Run("VolumeRestriction", func(t *testing.T) {
+		testVolumeRestriction(t, env)
+	})
+
+	t.Run("TopologySpread", func(t *testing.T) {
+		testTopologySpread(t, env)
+	})
+
+	t.Run("AddonUpgrade", func(t *testing.T) {
+		testAddonUpgrade(t, env)
+	})
+
+	t.Run("AddonConfigValidation", func(t *testing.T) {
+		testAddonConfigValidation(t, env)
+	})
+
+	t.Run("AddonMultiCluster", func(t *testing.T) {
+		testAddonMultiCluster(t, env)
+	})
+
+	t.Run("Workspace", func(t *testing.T) {
+		testWorkspace(t, env)
+	})
+
+	t.Run("AddonHelmInstall", func(t *testing.T) {
+		testAddonHelmInstall(t, env)
+	})
+
+	t.Run("CapacityFilter", func(t *testing.T) {
+		testCapacityFilter(t, env)
+	})
+
+	t.Run("DaemonSetWorkload", func(t *testing.T) {
+		testDaemonSetWorkload(t, env)
 	})
 }
 
@@ -1970,5 +2013,671 @@ func testOverrides(t *testing.T, env *TestEnvironment) {
 		assert.NotEmpty(t, finalApp.Spec.Overrides, "Overrides should be set")
 		assert.NotNil(t, finalApp.Spec.Overrides[0].Resources, "Resource override should be set")
 		assert.Equal(t, "500m", finalApp.Spec.Overrides[0].Resources.Requests.Cpu().String(), "CPU request override should match")
+	})
+}
+
+// =============================================================================
+// Credentials Management Tests
+// =============================================================================
+
+const (
+	annotationCredentialsCA    = "cluster.rocket.io/credentials-ca"
+	annotationCredentialsToken = "cluster.rocket.io/credentials-token"
+	annotationAPIServerURL     = "cluster.rocket.io/apiserver-url"
+)
+
+func testCredentialsManagement(t *testing.T, env *TestEnvironment) {
+	ctx := env.Context()
+	c := env.Client
+
+	t.Run("EdgeCredentialsToSecret", func(t *testing.T) {
+		clusterName := "e2e-edge-creds"
+		env.CreateEdgeCluster(t, clusterName, map[string]string{"e2e-test": "edge-creds"})
+		defer env.DeleteCluster(clusterName)
+
+		secret := env.WaitForClusterSecret(t, clusterName, 30*time.Second)
+		require.NotEmpty(t, secret.Data["token"], "Edge secret token should be set")
+		require.NotEmpty(t, secret.Data["caData"], "Edge secret CA should be set")
+
+		var cluster clusterv1alpha1.ManagedCluster
+		err := wait.PollUntilContextTimeout(ctx, 500*time.Millisecond, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+			if err := c.Get(ctx, types.NamespacedName{Name: clusterName}, &cluster); err != nil {
+				return false, nil
+			}
+			if cluster.Spec.SecretRef == nil || cluster.Spec.SecretRef.Name == "" {
+				return false, nil
+			}
+			if cluster.Status.State != clusterv1alpha1.ClusterReady {
+				return false, nil
+			}
+			if cluster.Status.APIServerURL == "" {
+				return false, nil
+			}
+			if cluster.Annotations != nil {
+				if _, ok := cluster.Annotations[annotationCredentialsToken]; ok {
+					return false, nil
+				}
+				if _, ok := cluster.Annotations[annotationCredentialsCA]; ok {
+					return false, nil
+				}
+				if _, ok := cluster.Annotations[annotationAPIServerURL]; ok {
+					return false, nil
+				}
+			}
+			return true, nil
+		})
+		require.NoError(t, err, "Edge credentials should be persisted and annotations removed")
+	})
+
+	t.Run("EdgeCredentialsRotation", func(t *testing.T) {
+		clusterName := "e2e-edge-rotate"
+		env.CreateEdgeCluster(t, clusterName, map[string]string{"e2e-test": "edge-rotate"})
+		defer env.DeleteCluster(clusterName)
+
+		env.WaitForClusterSecret(t, clusterName, 30*time.Second)
+
+		newToken := "rotated-token"
+		newCA := base64.StdEncoding.EncodeToString([]byte("rotated-ca"))
+		env.PatchClusterAnnotations(t, clusterName, map[string]string{
+			annotationCredentialsToken: newToken,
+			annotationCredentialsCA:    newCA,
+			annotationAPIServerURL:     "https://kubernetes.default.svc:443",
+		})
+
+		secretName := fmt.Sprintf("cluster-creds-%s", clusterName)
+		var secret corev1.Secret
+		err := wait.PollUntilContextTimeout(ctx, 500*time.Millisecond, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+			if err := c.Get(ctx, types.NamespacedName{Name: secretName, Namespace: TestNamespace}, &secret); err != nil {
+				return false, nil
+			}
+			return string(secret.Data["token"]) == newToken && string(secret.Data["caData"]) == "rotated-ca", nil
+		})
+		require.NoError(t, err, "Edge secret should be updated after rotation")
+	})
+
+	t.Run("HubMissingSecretRef", func(t *testing.T) {
+		clusterName := "e2e-hub-missing-secret"
+		mc := &clusterv1alpha1.ManagedCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterName},
+			Spec: clusterv1alpha1.ManagedClusterSpec{
+				ConnectionMode: clusterv1alpha1.ClusterConnectionModeHub,
+				APIServer:      env.Config.Host,
+			},
+		}
+		_ = c.Delete(ctx, mc)
+		require.NoError(t, c.Create(ctx, mc))
+		defer env.DeleteCluster(clusterName)
+
+		env.WaitForClusterState(t, clusterName, clusterv1alpha1.ClusterRejected, 30*time.Second)
+	})
+
+	t.Run("HubSecretRefDedup", func(t *testing.T) {
+		secretName := "e2e-shared-secret"
+		env.CreateClusterSecret(t, secretName)
+
+		clusterA := &clusterv1alpha1.ManagedCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "e2e-hub-a"},
+			Spec: clusterv1alpha1.ManagedClusterSpec{
+				ConnectionMode: clusterv1alpha1.ClusterConnectionModeHub,
+				APIServer:      env.Config.Host,
+				SecretRef:      &corev1.LocalObjectReference{Name: secretName},
+			},
+		}
+		clusterB := &clusterv1alpha1.ManagedCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "e2e-hub-b"},
+			Spec: clusterv1alpha1.ManagedClusterSpec{
+				ConnectionMode: clusterv1alpha1.ClusterConnectionModeHub,
+				APIServer:      env.Config.Host,
+				SecretRef:      &corev1.LocalObjectReference{Name: secretName},
+			},
+		}
+		_ = c.Delete(ctx, clusterA)
+		_ = c.Delete(ctx, clusterB)
+		require.NoError(t, c.Create(ctx, clusterA))
+		require.NoError(t, c.Create(ctx, clusterB))
+		defer env.DeleteCluster(clusterA.Name)
+		defer env.DeleteCluster(clusterB.Name)
+
+		env.WaitForClusterState(t, clusterA.Name, clusterv1alpha1.ClusterReady, 30*time.Second)
+
+		err := wait.PollUntilContextTimeout(ctx, 500*time.Millisecond, 20*time.Second, true, func(ctx context.Context) (bool, error) {
+			var got clusterv1alpha1.ManagedCluster
+			err := c.Get(ctx, types.NamespacedName{Name: clusterB.Name}, &got)
+			return errors.IsNotFound(err), nil
+		})
+		require.NoError(t, err, "Duplicate cluster should be deleted when SecretRef is shared")
+	})
+}
+
+// =============================================================================
+// Volume Restriction Tests
+// =============================================================================
+
+func testVolumeRestriction(t *testing.T, env *TestEnvironment) {
+	ctx := env.Context()
+	c := env.Client
+
+	t.Run("PVCStickyPlacement", func(t *testing.T) {
+		clusterA := "e2e-vr-a"
+		clusterB := "e2e-vr-b"
+		appName := "e2e-vr-app"
+		namespace := "default"
+
+		env.CreateHubCluster(t, clusterA, map[string]string{"site": "a", "e2e-test": "volume-restriction"})
+		defer env.DeleteCluster(clusterA)
+		env.CreateHubCluster(t, clusterB, map[string]string{"site": "b", "e2e-test": "volume-restriction"})
+		defer env.DeleteCluster(clusterB)
+
+		replicas := int32(2)
+		app := &appsv1alpha1.Application{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      appName,
+				Namespace: namespace,
+			},
+			Spec: appsv1alpha1.ApplicationSpec{
+				Replicas: &replicas,
+				ClusterAffinity: &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{
+							{
+								MatchExpressions: []corev1.NodeSelectorRequirement{
+									{
+										Key:      "site",
+										Operator: corev1.NodeSelectorOpIn,
+										Values:   []string{"a"},
+									},
+								},
+							},
+						},
+					},
+				},
+				Workload: appsv1alpha1.WorkloadGVK{
+					APIVersion: "apps/v1",
+					Kind:       "Deployment",
+				},
+				Template: toRaw(map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"labels": map[string]string{"app": appName},
+					},
+					"spec": map[string]interface{}{
+						"containers": []interface{}{
+							map[string]interface{}{
+								"name":  "nginx",
+								"image": "nginx:latest",
+								"volumeMounts": []interface{}{
+									map[string]interface{}{
+										"name":      "data",
+										"mountPath": "/data",
+									},
+								},
+							},
+						},
+						"volumes": []interface{}{
+							map[string]interface{}{
+								"name": "data",
+								"persistentVolumeClaim": map[string]interface{}{
+									"claimName": "data",
+								},
+							},
+						},
+					},
+				}),
+			},
+		}
+
+		env.CreateApplication(t, app)
+		defer env.DeleteApplication(appName, namespace)
+
+		scheduled := env.WaitForApplicationScheduled(t, appName, namespace, 30*time.Second)
+		require.Len(t, scheduled.Status.Placement.Topology, 1, "PVC app should initially schedule to one cluster")
+		assert.Equal(t, clusterA, scheduled.Status.Placement.Topology[0].Name)
+
+		// Expand affinity to include clusterB and scale up
+		newReplicas := int32(4)
+		err := wait.PollUntilContextTimeout(ctx, 500*time.Millisecond, 10*time.Second, true, func(ctx context.Context) (bool, error) {
+			var latest appsv1alpha1.Application
+			if err := c.Get(ctx, types.NamespacedName{Name: appName, Namespace: namespace}, &latest); err != nil {
+				return false, nil
+			}
+			latest.Spec.Replicas = &newReplicas
+			latest.Spec.ClusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values = []string{"a", "b"}
+			return c.Update(ctx, &latest) == nil, nil
+		})
+		require.NoError(t, err, "Failed to update application for PVC test")
+
+		// Verify placement stays on the original cluster
+		err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+			var got appsv1alpha1.Application
+			if err := c.Get(ctx, types.NamespacedName{Name: appName, Namespace: namespace}, &got); err != nil {
+				return false, nil
+			}
+			return len(got.Status.Placement.Topology) == 1 && got.Status.Placement.Topology[0].Name == clusterA, nil
+		})
+		require.NoError(t, err, "PVC app should not be scheduled to new clusters")
+	})
+}
+
+// =============================================================================
+// Topology Spread Tests
+// =============================================================================
+
+func testTopologySpread(t *testing.T, env *TestEnvironment) {
+	t.Run("PreferEmptyTopologyDomain", func(t *testing.T) {
+		clusterA := "e2e-topo-a"
+		clusterB := "e2e-topo-b"
+		namespace := "default"
+
+		env.CreateHubCluster(t, clusterA, map[string]string{
+			"e2e-test":                    "topology",
+			"topology.kubernetes.io/zone": "zone-a",
+		})
+		defer env.DeleteCluster(clusterA)
+		env.CreateHubCluster(t, clusterB, map[string]string{
+			"e2e-test":                    "topology",
+			"topology.kubernetes.io/zone": "zone-b",
+		})
+		defer env.DeleteCluster(clusterB)
+
+		appA := &appsv1alpha1.Application{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "e2e-topo-app-a",
+				Namespace: namespace,
+				Annotations: map[string]string{
+					"apps.rocket.io/scheduler-strategy": "SingleCluster",
+				},
+			},
+			Spec: appsv1alpha1.ApplicationSpec{
+				Replicas: func() *int32 { r := int32(3); return &r }(),
+				ClusterAffinity: &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{
+							{
+								MatchExpressions: []corev1.NodeSelectorRequirement{
+									{
+										Key:      "topology.kubernetes.io/zone",
+										Operator: corev1.NodeSelectorOpIn,
+										Values:   []string{"zone-a"},
+									},
+								},
+							},
+						},
+					},
+				},
+				Workload: appsv1alpha1.WorkloadGVK{APIVersion: "apps/v1", Kind: "Deployment"},
+				Template: toRaw(map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"labels": map[string]string{"app": "e2e-topo-app-a"},
+					},
+					"spec": map[string]interface{}{
+						"containers": []interface{}{
+							map[string]interface{}{"name": "nginx", "image": "nginx:latest"},
+						},
+					},
+				}),
+			},
+		}
+
+		env.CreateApplication(t, appA)
+		defer env.DeleteApplication(appA.Name, namespace)
+		env.WaitForApplicationScheduled(t, appA.Name, namespace, 30*time.Second)
+
+		appB := &appsv1alpha1.Application{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "e2e-topo-app-b",
+				Namespace: namespace,
+				Annotations: map[string]string{
+					"apps.rocket.io/scheduler-strategy": "SingleCluster",
+				},
+			},
+			Spec: appsv1alpha1.ApplicationSpec{
+				ClusterAffinity: &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{
+							{
+								MatchExpressions: []corev1.NodeSelectorRequirement{
+									{
+										Key:      "topology.kubernetes.io/zone",
+										Operator: corev1.NodeSelectorOpIn,
+										Values:   []string{"zone-a", "zone-b"},
+									},
+								},
+							},
+						},
+					},
+				},
+				Workload: appsv1alpha1.WorkloadGVK{APIVersion: "apps/v1", Kind: "Deployment"},
+				Template: toRaw(map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"labels": map[string]string{"app": "e2e-topo-app-b"},
+					},
+					"spec": map[string]interface{}{
+						"containers": []interface{}{
+							map[string]interface{}{"name": "nginx", "image": "nginx:latest"},
+						},
+					},
+				}),
+			},
+		}
+
+		env.CreateApplication(t, appB)
+		defer env.DeleteApplication(appB.Name, namespace)
+
+		scheduled := env.WaitForApplicationScheduled(t, appB.Name, namespace, 30*time.Second)
+		assert.Equal(t, clusterB, scheduled.Status.Placement.Topology[0].Name, "TopologySpread should prefer zone with fewer replicas")
+	})
+}
+
+// =============================================================================
+// Workspace Tests
+// =============================================================================
+
+func testWorkspace(t *testing.T, env *TestEnvironment) {
+	ctx := env.Context()
+	c := env.Client
+
+	t.Run("WorkspacePropagation", func(t *testing.T) {
+		clusterA := "e2e-ws-a"
+		clusterB := "e2e-ws-b"
+		wsName := "e2e-workspace"
+
+		env.CreateHubCluster(t, clusterA, map[string]string{"team": "alpha"})
+		defer env.DeleteCluster(clusterA)
+		env.CreateHubCluster(t, clusterB, map[string]string{"team": "alpha"})
+		defer env.DeleteCluster(clusterB)
+
+		ws := &workspacev1alpha1.Workspace{
+			ObjectMeta: metav1.ObjectMeta{Name: wsName},
+			Spec: workspacev1alpha1.WorkspaceSpec{
+				Name:            wsName,
+				ClusterSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"team": "alpha"}},
+				ResourceConstraints: &workspacev1alpha1.WorkspaceConstraints{
+					Quota: &corev1.ResourceQuotaSpec{
+						Hard: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("2"),
+							corev1.ResourceMemory: resource.MustParse("2Gi"),
+						},
+					},
+					LimitRange: &corev1.LimitRangeSpec{
+						Limits: []corev1.LimitRangeItem{
+							{
+								Type: corev1.LimitTypeContainer,
+								DefaultRequest: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("100m"),
+									corev1.ResourceMemory: resource.MustParse("128Mi"),
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		_ = c.Delete(ctx, ws)
+		require.NoError(t, c.Create(ctx, ws))
+		defer func() { _ = c.Delete(ctx, ws) }()
+
+		// Wait for workspace to be applied to both clusters
+		err := wait.PollUntilContextTimeout(ctx, 1*time.Second, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+			var got workspacev1alpha1.Workspace
+			if err := c.Get(ctx, types.NamespacedName{Name: wsName}, &got); err != nil {
+				return false, nil
+			}
+			return len(got.Status.AppliedClusters) == 2, nil
+		})
+		require.NoError(t, err, "Workspace should be applied to all matching clusters")
+
+		// Verify namespace and quota exist in hub
+		var ns corev1.Namespace
+		require.NoError(t, c.Get(ctx, types.NamespacedName{Name: wsName}, &ns))
+		var quota corev1.ResourceQuota
+		require.NoError(t, c.Get(ctx, types.NamespacedName{Name: "workspace-quota", Namespace: wsName}, &quota))
+		var limits corev1.LimitRange
+		require.NoError(t, c.Get(ctx, types.NamespacedName{Name: "workspace-limits", Namespace: wsName}, &limits))
+	})
+}
+
+// =============================================================================
+// Addon Helm Install Tests
+// =============================================================================
+
+func testAddonHelmInstall(t *testing.T, env *TestEnvironment) {
+	ctx := env.Context()
+	c := env.Client
+
+	t.Run("MCSHelmInstall", func(t *testing.T) {
+		brokerChart := os.Getenv("CHART_SUBMARINER_BROKER")
+		agentChart := os.Getenv("CHART_SUBMARINER")
+		if brokerChart != "" && !(strings.HasPrefix(brokerChart, "http://") || strings.HasPrefix(brokerChart, "https://")) {
+			t.Fatalf("CHART_SUBMARINER_BROKER must be a chart URL")
+		}
+		if agentChart != "" && !(strings.HasPrefix(agentChart, "http://") || strings.HasPrefix(agentChart, "https://")) {
+			t.Fatalf("CHART_SUBMARINER must be a chart URL")
+		}
+		clusterName := "e2e-addon-cluster"
+		mc := env.CreateHubCluster(t, clusterName, map[string]string{"e2e-test": "addon"})
+		defer env.DeleteCluster(clusterName)
+
+		// Enable MCS addon on the cluster
+		err := wait.PollUntilContextTimeout(ctx, 500*time.Millisecond, 10*time.Second, true, func(ctx context.Context) (bool, error) {
+			var latest clusterv1alpha1.ManagedCluster
+			if err := c.Get(ctx, types.NamespacedName{Name: mc.Name}, &latest); err != nil {
+				return false, nil
+			}
+			latest.Spec.Addons = []clusterv1alpha1.ClusterAddon{
+				{Name: mcs.AddonName, Enabled: true},
+			}
+			return c.Update(ctx, &latest) == nil, nil
+		})
+		require.NoError(t, err, "Failed to enable addon")
+
+		// Wait for broker secret or broker SA to exist
+		err = wait.PollUntilContextTimeout(ctx, 2*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+			secret := &corev1.Secret{}
+			err := c.Get(ctx, types.NamespacedName{Name: "submariner-k8s-broker-client-token", Namespace: "submariner-k8s-broker"}, secret)
+			if err == nil {
+				return true, nil
+			}
+			if !errors.IsNotFound(err) {
+				return false, nil
+			}
+			sa := &corev1.ServiceAccount{}
+			if err := c.Get(ctx, types.NamespacedName{Name: "submariner-k8s-broker-client", Namespace: "submariner-k8s-broker"}, sa); err != nil {
+				return false, nil
+			}
+			return len(sa.Secrets) > 0, nil
+		})
+		require.NoError(t, err, "Broker resources should be created by Helm")
+
+		// Wait for addon config to be populated on cluster
+		var addonConfig map[string]string
+		err = wait.PollUntilContextTimeout(ctx, 2*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+			var latest clusterv1alpha1.ManagedCluster
+			if err := c.Get(ctx, types.NamespacedName{Name: mc.Name}, &latest); err != nil {
+				return false, nil
+			}
+			for _, a := range latest.Spec.Addons {
+				if a.Name == mcs.AddonName {
+					if a.Config["brokerURL"] != "" && a.Config["brokerToken"] != "" && a.Config["brokerCA"] != "" {
+						addonConfig = a.Config
+						return true, nil
+					}
+				}
+			}
+			return false, nil
+		})
+		require.NoError(t, err, "Addon config should be populated from broker info")
+
+		// Run agent controller to install submariner via Helm
+		agent := &mcs.AgentController{}
+		require.NoError(t, agent.Reconcile(ctx, addon.AddonConfig{
+			ClusterName: mc.Name,
+			Config:      addonConfig,
+			Client:      env.Client,
+		}))
+
+		// Verify submariner-operator namespace exists
+		var ns corev1.Namespace
+		err = wait.PollUntilContextTimeout(ctx, 2*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+			if err := c.Get(ctx, types.NamespacedName{Name: "submariner-operator"}, &ns); err != nil {
+				return false, nil
+			}
+			return true, nil
+		})
+		require.NoError(t, err, "Submariner operator namespace should exist after agent install")
+	})
+}
+
+// =============================================================================
+// Capacity Filter Tests
+// =============================================================================
+
+func testCapacityFilter(t *testing.T, env *TestEnvironment) {
+	ctx := env.Context()
+	c := env.Client
+
+	t.Run("InsufficientResources", func(t *testing.T) {
+		clusterName := "e2e-capacity-low"
+		appName := "e2e-capacity-app"
+		namespace := "default"
+
+		env.CreateHubCluster(t, clusterName, map[string]string{"e2e-test": "capacity"})
+		defer env.DeleteCluster(clusterName)
+		env.UpdateClusterStatusWithAllocation(t, clusterName, "100m", "128Mi", "0", "0")
+
+		app := &appsv1alpha1.Application{
+			ObjectMeta: metav1.ObjectMeta{Name: appName, Namespace: namespace},
+			Spec: appsv1alpha1.ApplicationSpec{
+				ClusterAffinity: &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{
+							{
+								MatchExpressions: []corev1.NodeSelectorRequirement{
+									{Key: "e2e-test", Operator: corev1.NodeSelectorOpIn, Values: []string{"capacity"}},
+								},
+							},
+						},
+					},
+				},
+				Workload: appsv1alpha1.WorkloadGVK{APIVersion: "apps/v1", Kind: "Deployment"},
+				Template: toRaw(map[string]interface{}{
+					"metadata": map[string]interface{}{"labels": map[string]string{"app": appName}},
+					"spec": map[string]interface{}{
+						"containers": []interface{}{
+							map[string]interface{}{
+								"name":  "busybox",
+								"image": "busybox:latest",
+								"resources": map[string]interface{}{
+									"requests": map[string]interface{}{"cpu": "500m", "memory": "512Mi"},
+								},
+							},
+						},
+					},
+				}),
+			},
+		}
+
+		env.CreateApplication(t, app)
+		defer env.DeleteApplication(appName, namespace)
+
+		// Verify app is NOT scheduled due to insufficient resources
+		time.Sleep(3 * time.Second)
+		var got appsv1alpha1.Application
+		require.NoError(t, c.Get(ctx, types.NamespacedName{Name: appName, Namespace: namespace}, &got))
+		assert.Empty(t, got.Status.Placement.Topology, "App should not be scheduled when capacity is insufficient")
+	})
+
+	t.Run("MissingResourceSummary", func(t *testing.T) {
+		clusterName := "e2e-capacity-missing"
+		appName := "e2e-capacity-missing-app"
+		namespace := "default"
+
+		env.CreateHubCluster(t, clusterName, map[string]string{"e2e-test": "capacity-missing"})
+		defer env.DeleteCluster(clusterName)
+
+		// Clear resource summary
+		err := wait.PollUntilContextTimeout(ctx, 500*time.Millisecond, 10*time.Second, true, func(ctx context.Context) (bool, error) {
+			var cluster clusterv1alpha1.ManagedCluster
+			if err := c.Get(ctx, types.NamespacedName{Name: clusterName}, &cluster); err != nil {
+				return false, nil
+			}
+			cluster.Status.ResourceSummary = nil
+			return c.Status().Update(ctx, &cluster) == nil, nil
+		})
+		require.NoError(t, err, "Failed to clear resource summary")
+
+		app := &appsv1alpha1.Application{
+			ObjectMeta: metav1.ObjectMeta{Name: appName, Namespace: namespace},
+			Spec: appsv1alpha1.ApplicationSpec{
+				ClusterAffinity: &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{{MatchExpressions: []corev1.NodeSelectorRequirement{{Key: "e2e-test", Operator: corev1.NodeSelectorOpIn, Values: []string{"capacity-missing"}}}}},
+					},
+				},
+				Workload: appsv1alpha1.WorkloadGVK{APIVersion: "apps/v1", Kind: "Deployment"},
+				Template: toRaw(map[string]interface{}{
+					"metadata": map[string]interface{}{"labels": map[string]string{"app": appName}},
+					"spec": map[string]interface{}{
+						"containers": []interface{}{map[string]interface{}{"name": "busybox", "image": "busybox:latest"}},
+					},
+				}),
+			},
+		}
+
+		env.CreateApplication(t, app)
+		defer env.DeleteApplication(appName, namespace)
+
+		time.Sleep(3 * time.Second)
+		var got appsv1alpha1.Application
+		require.NoError(t, c.Get(ctx, types.NamespacedName{Name: appName, Namespace: namespace}, &got))
+		assert.Empty(t, got.Status.Placement.Topology, "App should not be scheduled when resource summary is missing")
+	})
+}
+
+// =============================================================================
+// DaemonSet Workload Tests
+// =============================================================================
+
+func testDaemonSetWorkload(t *testing.T, env *TestEnvironment) {
+	ctx := env.Context()
+	c := env.Client
+
+	t.Run("DaemonSetSupport", func(t *testing.T) {
+		clusterName := "e2e-daemonset"
+		appName := "e2e-daemonset-app"
+		namespace := "default"
+
+		env.CreateHubCluster(t, clusterName, map[string]string{"e2e-test": "daemonset"})
+		defer env.DeleteCluster(clusterName)
+
+		app := &appsv1alpha1.Application{
+			ObjectMeta: metav1.ObjectMeta{Name: appName, Namespace: namespace},
+			Spec: appsv1alpha1.ApplicationSpec{
+				ClusterAffinity: &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{{MatchExpressions: []corev1.NodeSelectorRequirement{{Key: "e2e-test", Operator: corev1.NodeSelectorOpIn, Values: []string{"daemonset"}}}}},
+					},
+				},
+				Workload: appsv1alpha1.WorkloadGVK{APIVersion: "apps/v1", Kind: "DaemonSet"},
+				Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": appName}},
+				Template: toRaw(map[string]interface{}{
+					"metadata": map[string]interface{}{"labels": map[string]string{"app": appName}},
+					"spec": map[string]interface{}{
+						"containers": []interface{}{map[string]interface{}{"name": "nginx", "image": "nginx:latest"}},
+					},
+				}),
+			},
+		}
+
+		env.CreateApplication(t, app)
+		defer env.DeleteApplication(appName, namespace)
+
+		env.WaitForApplicationScheduled(t, appName, namespace, 30*time.Second)
+		var ds appsv1.DaemonSet
+		err := wait.PollUntilContextTimeout(ctx, 1*time.Second, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+			if err := c.Get(ctx, types.NamespacedName{Name: appName, Namespace: namespace}, &ds); err != nil {
+				return false, nil
+			}
+			return ds.Spec.Selector != nil, nil
+		})
+		require.NoError(t, err, "DaemonSet should be created")
 	})
 }
