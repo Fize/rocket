@@ -13,12 +13,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-)
 
-const (
-	AnnotationCredentialsCA    = "cluster.rocket.io/credentials-ca"
-	AnnotationCredentialsToken = "cluster.rocket.io/credentials-token"
-	AnnotationAPIServerURL     = "cluster.rocket.io/apiserver-url"
+	"github.com/hex-techs/rocket/pkg/constants"
 )
 
 // ClusterReconciler reconciles a ManagedCluster object
@@ -114,9 +110,9 @@ func (r *ClusterReconciler) reconcileHub(ctx context.Context, cluster *clusterv1
 func (r *ClusterReconciler) reconcileEdge(ctx context.Context, cluster *clusterv1alpha1.ManagedCluster) (ctrl.Result, error) {
 	// 1. Handle Credentials from Annotations
 	if cluster.Annotations != nil {
-		hasCredentials := cluster.Annotations[AnnotationCredentialsToken] != "" ||
-			cluster.Annotations["cluster.rocket.io/credentials-cert"] != "" ||
-			cluster.Annotations[AnnotationCredentialsCA] != ""
+		hasCredentials := cluster.Annotations[constants.AnnotationCredentialsToken] != "" ||
+			cluster.Annotations[constants.AnnotationCredentialsCert] != "" ||
+			cluster.Annotations[constants.AnnotationCredentialsCA] != ""
 		if hasCredentials {
 			if err := r.handleEdgeCredentials(ctx, cluster); err != nil {
 				return ctrl.Result{}, err
@@ -159,11 +155,11 @@ func (r *ClusterReconciler) reconcileEdge(ctx context.Context, cluster *clusterv
 }
 
 func (r *ClusterReconciler) handleEdgeCredentials(ctx context.Context, cluster *clusterv1alpha1.ManagedCluster) error {
-	caDataB64 := cluster.Annotations[AnnotationCredentialsCA]
-	token := cluster.Annotations[AnnotationCredentialsToken]
-	apiServerURL := cluster.Annotations[AnnotationAPIServerURL]
-	certDataB64 := cluster.Annotations["cluster.rocket.io/credentials-cert"]
-	keyDataB64 := cluster.Annotations["cluster.rocket.io/credentials-key"]
+	caDataB64 := cluster.Annotations[constants.AnnotationCredentialsCA]
+	token := cluster.Annotations[constants.AnnotationCredentialsToken]
+	apiServerURL := cluster.Annotations[constants.AnnotationAPIServerURL]
+	certDataB64 := cluster.Annotations[constants.AnnotationCredentialsCert]
+	keyDataB64 := cluster.Annotations[constants.AnnotationCredentialsKey]
 
 	ctrl.Log.Info("Handling edge credentials", "cluster", cluster.Name, "apiServerURL", apiServerURL)
 
@@ -174,7 +170,7 @@ func (r *ClusterReconciler) handleEdgeCredentials(ctx context.Context, cluster *
 	secretName := fmt.Sprintf("cluster-creds-%s", cluster.Name)
 	secretNamespace := r.Namespace
 	if secretNamespace == "" {
-		secretNamespace = "rocket-system"
+		secretNamespace = constants.DefaultNamespace
 	}
 
 	secret := &corev1.Secret{
@@ -211,11 +207,11 @@ func (r *ClusterReconciler) handleEdgeCredentials(ctx context.Context, cluster *
 
 	// Update Cluster Spec and Remove Annotations
 	cluster.Spec.SecretRef = &corev1.LocalObjectReference{Name: secretName}
-	delete(cluster.Annotations, AnnotationCredentialsCA)
-	delete(cluster.Annotations, AnnotationCredentialsToken)
-	delete(cluster.Annotations, AnnotationAPIServerURL)
-	delete(cluster.Annotations, "cluster.rocket.io/credentials-cert")
-	delete(cluster.Annotations, "cluster.rocket.io/credentials-key")
+	delete(cluster.Annotations, constants.AnnotationCredentialsCA)
+	delete(cluster.Annotations, constants.AnnotationCredentialsToken)
+	delete(cluster.Annotations, constants.AnnotationAPIServerURL)
+	delete(cluster.Annotations, constants.AnnotationCredentialsCert)
+	delete(cluster.Annotations, constants.AnnotationCredentialsKey)
 
 	return r.Update(ctx, cluster)
 }

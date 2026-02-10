@@ -8,6 +8,8 @@ import (
 	"os"
 	"strings"
 
+	ctrl "sigs.k8s.io/controller-runtime"
+
 	"github.com/hex-techs/rocket/internal/manager/apiserver/handler"
 	clusterregistry "github.com/hex-techs/rocket/internal/manager/apiserver/registry/cluster"
 	"github.com/rancher/remotedialer"
@@ -50,7 +52,8 @@ func NewAPIServerOptions() *APIServerOptions {
 }
 
 func (s *APIServer) Start(ctx context.Context) error {
-	fmt.Println("DEBUG: Starting APIServer with custom configuration to disable OpenAPI")
+	logger := ctrl.Log.WithName("apiserver")
+	logger.Info("Starting APIServer with custom configuration")
 	o := NewAPIServerOptions()
 	o.SecureServing.BindPort = s.Port
 	o.SecureServing.ServerCert.CertDirectory = "/tmp" // Ensure we can write self-signed certs
@@ -100,7 +103,6 @@ func (s *APIServer) Start(ctx context.Context) error {
 	}
 
 	completedConfig := serverConfig.Complete()
-	// Check if we can intercept the config here? No, CompletedConfig fields are private.
 
 	server, err := completedConfig.New("rocket-apiserver", genericapiserver.NewEmptyDelegate())
 	if err != nil {

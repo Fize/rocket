@@ -10,6 +10,7 @@ import (
 
 	"github.com/hex-techs/rocket/internal/addon"
 	storagev1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
+	"github.com/hex-techs/rocket/pkg/constants"
 	"github.com/hex-techs/rocket/pkg/helm"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -132,7 +133,7 @@ func (c *ManagerController) Reconcile(ctx context.Context, config addon.AddonCon
 	}
 
 	// 3. Retrieve Broker Info
-	brokerInfo, err := c.getBrokerInfo(ctx)
+	brokerInfo, err := c.getBrokerInfo(ctx, config.Config)
 	if err != nil {
 		return fmt.Errorf("failed to get broker info: %v", err)
 	}
@@ -283,7 +284,7 @@ func (c *ManagerController) ensureBroker(ctx context.Context, config addon.Addon
 	return nil
 }
 
-func (c *ManagerController) getBrokerInfo(ctx context.Context) (map[string]string, error) {
+func (c *ManagerController) getBrokerInfo(ctx context.Context, config map[string]string) (map[string]string, error) {
 	// Read the Secret created by the Broker
 	secret := &corev1.Secret{}
 	err := c.mgrClient.Get(ctx, types.NamespacedName{Name: BrokerSecretName, Namespace: BrokerNamespace}, secret)
@@ -294,7 +295,10 @@ func (c *ManagerController) getBrokerInfo(ctx context.Context) (map[string]strin
 	token := string(secret.Data["token"])
 	ca := base64.StdEncoding.EncodeToString(secret.Data["ca.crt"])
 
-	brokerURL := "https://kubernetes.default.svc:443"
+	brokerURL := constants.DefaultAPIServerURL
+	if u, ok := config["brokerURL"]; ok && u != "" {
+		brokerURL = u
+	}
 
 	return map[string]string{
 		"brokerURL":   brokerURL,

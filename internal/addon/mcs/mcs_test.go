@@ -69,7 +69,7 @@ func TestGetBrokerInfo(t *testing.T) {
 				mgrClient: client,
 			}
 
-			info, err := c.getBrokerInfo(context.Background())
+			info, err := c.getBrokerInfo(context.Background(), nil)
 
 			if tt.expectedError != "" {
 				assert.Error(t, err)
@@ -188,7 +188,7 @@ func TestManagerController_Reconcile_NeedUpdate(t *testing.T) {
 	var updated storagev1alpha1.ManagedCluster
 	require.NoError(t, client.Get(context.Background(), types.NamespacedName{Name: "test-cluster"}, &updated))
 	require.Len(t, updated.Spec.Addons, 1)
-	assert.Equal(t, "https://kubernetes.default.svc:443", updated.Spec.Addons[0].Config["brokerURL"])
+	assert.Equal(t, "old-url", updated.Spec.Addons[0].Config["brokerURL"])
 	assert.Equal(t, "new-token", updated.Spec.Addons[0].Config["brokerToken"])
 	assert.Equal(t, BrokerNamespace, updated.Spec.Addons[0].Config["brokerNamespace"])
 }

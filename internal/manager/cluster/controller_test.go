@@ -15,6 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
+	"github.com/hex-techs/rocket/pkg/constants"
 )
 
 func newClusterScheme(t *testing.T) *runtime.Scheme {
@@ -102,8 +103,8 @@ func TestClusterReconciler_EdgeMode_Credentials(t *testing.T) {
 			Name:      clusterName,
 			Namespace: "default",
 			Annotations: map[string]string{
-				AnnotationCredentialsToken: "test-token",
-				AnnotationAPIServerURL:     "https://k8s.example.com",
+				constants.AnnotationCredentialsToken: "test-token",
+				constants.AnnotationAPIServerURL:     "https://k8s.example.com",
 			},
 		},
 		Spec: clusterv1alpha1.ManagedClusterSpec{
@@ -148,7 +149,7 @@ func TestClusterReconciler_EdgeMode_Credentials(t *testing.T) {
 	assert.NotNil(t, updatedCluster.Spec.SecretRef)
 	assert.Equal(t, "cluster-creds-"+clusterName, updatedCluster.Spec.SecretRef.Name)
 	assert.Equal(t, clusterv1alpha1.ClusterReady, updatedCluster.Status.State)
-	assert.Empty(t, updatedCluster.Annotations[AnnotationCredentialsToken])
+	assert.Empty(t, updatedCluster.Annotations[constants.AnnotationCredentialsToken])
 }
 
 func TestClusterReconciler_HubMode_Rejected(t *testing.T) {

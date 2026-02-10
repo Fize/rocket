@@ -7,25 +7,15 @@ import (
 	"sync"
 
 	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
+	"github.com/hex-techs/rocket/pkg/constants"
+	"github.com/hex-techs/rocket/pkg/scheme"
 	"github.com/rancher/remotedialer"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
-
-var (
-	scheme = runtime.NewScheme()
-)
-
-func init() {
-	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(clusterv1alpha1.AddToScheme(scheme))
-}
 
 // TunnelServer defines the interface for remotedialer.Server
 type TunnelServer interface {
@@ -110,7 +100,7 @@ func (m *ClientManager) GetCluster(ctx context.Context, clusterName string) (clu
 
 	// Create cluster
 	c, err = cluster.New(cfg, func(o *cluster.Options) {
-		o.Scheme = scheme
+		o.Scheme = scheme.Scheme
 		o.NewClient = m.ClientCreator
 	})
 	if err != nil {
@@ -170,7 +160,7 @@ func (m *ClientManager) buildEdgeModeConfig(ctx context.Context, cluster *cluste
 	dialer := m.TunnelServer.Dialer(cluster.Name)
 	host := cluster.Spec.APIServer
 	if host == "" {
-		host = "https://kubernetes.default.svc:443"
+		host = constants.DefaultAPIServerURL
 	}
 
 	cfg := &rest.Config{

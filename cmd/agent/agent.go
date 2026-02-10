@@ -22,13 +22,8 @@ import (
 	"time"
 
 	"github.com/hex-techs/rocket/internal/agent/cluster"
-	appsv1alpha1 "github.com/hex-techs/rocket/pkg/apis/apps/v1alpha1"
-	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
-	kruiseapi "github.com/openkruise/kruise-api"
+	"github.com/hex-techs/rocket/pkg/scheme"
 	"github.com/spf13/pflag"
-	"k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -38,16 +33,11 @@ import (
 )
 
 var (
-	scheme     = runtime.NewScheme()
 	setupLog   = ctrl.Log.WithName("setup")
 	_Namespace string
 )
 
 func init() {
-	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(kruiseapi.AddToScheme(scheme))
-	utilruntime.Must(appsv1alpha1.AddToScheme(scheme))
-	utilruntime.Must(clusterv1alpha1.AddToScheme(scheme))
 	_Namespace = os.Getenv("NAMESPACE")
 	if _Namespace == "" {
 		_Namespace = "kube-system"
@@ -85,7 +75,7 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme: scheme,
+		Scheme: scheme.Scheme,
 		Metrics: metricsserver.Options{
 			BindAddress: metricsAddr,
 		},

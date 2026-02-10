@@ -7,9 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -28,25 +25,12 @@ import (
 	"github.com/hex-techs/rocket/internal/manager/scheduler/queue"
 	"github.com/hex-techs/rocket/internal/manager/sharding"
 	"github.com/hex-techs/rocket/internal/manager/workspace"
-	appsv1alpha1 "github.com/hex-techs/rocket/pkg/apis/apps/v1alpha1"
-	aggregatedclusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/cluster/v1alpha1"
-	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
-	workspacev1alpha1 "github.com/hex-techs/rocket/pkg/apis/workspace/v1alpha1"
+	"github.com/hex-techs/rocket/pkg/scheme"
 )
 
 var (
-	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
 )
-
-func init() {
-	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(appsv1alpha1.AddToScheme(scheme))
-	utilruntime.Must(clusterv1alpha1.AddToScheme(scheme))
-	utilruntime.Must(aggregatedclusterv1alpha1.AddToScheme(scheme)) // for aggregated API
-	utilruntime.Must(workspacev1alpha1.AddToScheme(scheme))         // for workspace API
-	// +kubebuilder:scaffold:scheme
-}
 
 func main() {
 	var metricsAddr string
@@ -83,7 +67,7 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
+		Scheme:                 scheme.Scheme,
 		Metrics:                metricsserver.Options{BindAddress: metricsAddr},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,

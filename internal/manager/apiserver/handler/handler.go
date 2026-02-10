@@ -14,6 +14,7 @@ import (
 	"time"
 
 	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
+	"github.com/hex-techs/rocket/pkg/constants"
 	"github.com/rancher/remotedialer"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apiserver/pkg/server/mux"
@@ -91,9 +92,9 @@ func InstallHandler(m *mux.PathRecorderMux, c client.Client, server *remotediale
 	}))
 
 	m.HandlePrefix("/proxy/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ns := os.Getenv("POD_NAMESPACE")
+		ns := r.URL.Query().Get("namespace")
 		if ns == "" {
-			ns = "rocket-system"
+			ns = constants.DefaultNamespace
 		}
 
 		parts := strings.SplitN(strings.TrimPrefix(r.URL.Path, "/proxy/"), "/", 2)
@@ -132,7 +133,7 @@ func InstallHandler(m *mux.PathRecorderMux, c client.Client, server *remotediale
 
 			targetURL := cluster.Status.APIServerURL
 			if targetURL == "" {
-				targetURL = "https://kubernetes.default.svc:443"
+				targetURL = constants.DefaultAPIServerURL
 			}
 			u, _ := url.Parse(targetURL)
 

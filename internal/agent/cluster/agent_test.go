@@ -16,6 +16,7 @@ import (
 
 	appsv1alpha1 "github.com/hex-techs/rocket/pkg/apis/apps/v1alpha1"
 	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
+	"github.com/hex-techs/rocket/pkg/constants"
 )
 
 func TestNewAgent(t *testing.T) {
@@ -160,7 +161,7 @@ func TestAgent_getClusterCredentials(t *testing.T) {
 	assert.NotNil(t, creds)
 
 	// Should have at least the APIServer URL (defaults to kubernetes.default.svc if not in cluster)
-	assert.Contains(t, creds, AnnotationAPIServerURL)
+	assert.Contains(t, creds, constants.AnnotationAPIServerURL)
 }
 
 func TestAgent_sendHeartbeat_ClusterNotFound(t *testing.T) {
@@ -198,9 +199,9 @@ func TestAgentOptions_Fields(t *testing.T) {
 }
 
 func TestConstants(t *testing.T) {
-	assert.Equal(t, "cluster.rocket.io/credentials-ca", AnnotationCredentialsCA)
-	assert.Equal(t, "cluster.rocket.io/credentials-token", AnnotationCredentialsToken)
-	assert.Equal(t, "cluster.rocket.io/apiserver-url", AnnotationAPIServerURL)
+	assert.Equal(t, "cluster.rocket.io/credentials-ca", constants.AnnotationCredentialsCA)
+	assert.Equal(t, "cluster.rocket.io/credentials-token", constants.AnnotationCredentialsToken)
+	assert.Equal(t, "cluster.rocket.io/apiserver-url", constants.AnnotationAPIServerURL)
 }
 
 func TestAgent_InitHubClient_WithHubURLAndToken(t *testing.T) {
@@ -303,7 +304,7 @@ func TestAgent_Register_ExistingCluster_Update(t *testing.T) {
 
 	// Should preserve existing annotation and add new ones
 	assert.Equal(t, "existing-value", updatedCluster.Annotations["existing-key"])
-	assert.Contains(t, updatedCluster.Annotations, AnnotationAPIServerURL)
+	assert.Contains(t, updatedCluster.Annotations, constants.AnnotationAPIServerURL)
 }
 
 func TestAgent_sendHeartbeat_StatusUpdateFallback(t *testing.T) {
@@ -358,7 +359,7 @@ func TestAgent_getClusterCredentials_EnvironmentVariables(t *testing.T) {
 
 	creds, err := agent.getClusterCredentials()
 	assert.NoError(t, err)
-	assert.Equal(t, "https://10.0.0.1:443", creds[AnnotationAPIServerURL])
+	assert.Equal(t, "https://10.0.0.1:443", creds[constants.AnnotationAPIServerURL])
 }
 
 func TestAgent_getClusterCredentials_DefaultAPIServer(t *testing.T) {
@@ -385,7 +386,7 @@ func TestAgent_getClusterCredentials_DefaultAPIServer(t *testing.T) {
 
 	creds, err := agent.getClusterCredentials()
 	assert.NoError(t, err)
-	assert.Equal(t, "https://kubernetes.default.svc:443", creds[AnnotationAPIServerURL])
+	assert.Equal(t, "https://kubernetes.default.svc:443", creds[constants.AnnotationAPIServerURL])
 }
 
 func TestNewAgent_DefaultTunnelURL(t *testing.T) {

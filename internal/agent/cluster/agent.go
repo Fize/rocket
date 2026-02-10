@@ -13,22 +13,15 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/rancher/remotedialer"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	appsv1alpha1 "github.com/hex-techs/rocket/pkg/apis/apps/v1alpha1"
 	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
-)
-
-const (
-	AnnotationCredentialsCA    = "cluster.rocket.io/credentials-ca"
-	AnnotationCredentialsToken = "cluster.rocket.io/credentials-token"
-	AnnotationAPIServerURL     = "cluster.rocket.io/apiserver-url"
+	"github.com/hex-techs/rocket/pkg/constants"
+	"github.com/hex-techs/rocket/pkg/scheme"
 )
 
 // AgentOptions holds the configuration for the Agent
@@ -79,12 +72,7 @@ func (a *Agent) InitHubClient() error {
 		}
 	}
 
-	scheme := runtime.NewScheme()
-	_ = clientgoscheme.AddToScheme(scheme)
-	_ = clusterv1alpha1.AddToScheme(scheme)
-	_ = appsv1alpha1.AddToScheme(scheme)
-
-	c, err := client.New(config, client.Options{Scheme: scheme})
+	c, err := client.New(config, client.Options{Scheme: scheme.Scheme})
 	if err != nil {
 		return fmt.Errorf("failed to create hub client: %w", err)
 	}
@@ -100,22 +88,22 @@ func (a *Agent) getClusterCredentials() (map[string]string, error) {
 	// Read CA
 	caData, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/ca.crt")
 	if err == nil {
-		creds[AnnotationCredentialsCA] = base64.StdEncoding.EncodeToString(caData)
+		creds[constants.AnnotationCredentialsCA] = base64.StdEncoding.EncodeToString(caData)
 	}
 
 	// Read Token
 	tokenData, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/token")
 	if err == nil {
-		creds[AnnotationCredentialsToken] = string(tokenData)
+		creds[constants.AnnotationCredentialsToken] = string(tokenData)
 	}
 
 	// Determine APIServer URL
 	host := os.Getenv("KUBERNETES_SERVICE_HOST")
 	port := os.Getenv("KUBERNETES_SERVICE_PORT")
 	if host != "" && port != "" {
-		creds[AnnotationAPIServerURL] = fmt.Sprintf("https://%s:%s", host, port)
+		creds[constants.AnnotationAPIServerURL] = fmt.Sprintf("https://%s:%s", host, port)
 	} else {
-		creds[AnnotationAPIServerURL] = "https://kubernetes.default.svc:443"
+		creds[constants.AnnotationAPIServerURL] = constants.DefaultAPIServerURL
 	}
 
 	return creds, nil
