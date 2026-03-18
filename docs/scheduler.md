@@ -8,22 +8,7 @@ Rocket Scheduler adopts a plugin-based architecture similar to Kubernetes Schedu
 
 ## Scheduling Flow
 
-```
-                              Scheduling Flow
-                                    │
-    ┌───────────────────────────────┼───────────────────────────────┐
-    │                               │                               │
-    ▼                               ▼                               ▼
-┌─────────┐                  ┌─────────┐                  ┌─────────┐
-│  Filter │      ───►        │  Score  │      ───►        │  Select │
-└─────────┘                  └─────────┘                  └─────────┘
-    │                               │                               │
-    │                               │                               │
-    ▼                               ▼                               ▼
-Exclude clusters              Score candidate               Select final
-that don't meet               clusters (0-100)              target clusters
-requirements
-```
+![Scheduling Flow](images/scheduler_flow.png)
 
 ## Scheduling Phases
 

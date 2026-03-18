@@ -15,56 +15,7 @@ This document focuses on Edge mode's tunnel connection mechanism, the Rocket Age
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           Hub Cluster                                        │
-│                                                                              │
-│   ┌──────────────────────────────────────────────────────────────────────┐  │
-│   │                        Rocket Manager                                 │  │
-│   │                                                                       │  │
-│   │   ┌───────────────┐    ┌───────────────┐    ┌───────────────┐       │  │
-│   │   │ TunnelServer  │    │ ClientManager │    │ ClusterReconciler│    │  │
-│   │   │               │    │               │    │               │       │  │
-│   │   │ WebSocket     │◄───│ Route requests│◄───│ Watch clusters│       │  │
-│   │   │ endpoint:     │    │ based on mode │    │ update status │       │  │
-│   │   │ /connect      │    │               │    │               │       │  │
-│   │   └───────┬───────┘    └───────────────┘    └───────────────┘       │  │
-│   │           │                                                           │  │
-│   └───────────│───────────────────────────────────────────────────────────┘  │
-│               │                                                              │
-└───────────────│──────────────────────────────────────────────────────────────┘
-                │
-                │  WebSocket (reverse tunnel)
-                │  Authentication: Bootstrap Token or SA Token
-                │
-┌───────────────│──────────────────────────────────────────────────────────────┐
-│               │                     Edge Cluster                             │
-│               ▼                                                              │
-│   ┌───────────────────────────────────────────────────────────────────────┐  │
-│   │                         Rocket Agent                                   │  │
-│   │                                                                        │  │
-│   │   ┌───────────────┐    ┌───────────────┐    ┌───────────────┐        │  │
-│   │   │ TunnelClient  │    │   Heartbeat   │    │ LocalExecutor │        │  │
-│   │   │               │    │               │    │               │        │  │
-│   │   │ - Establish   │    │ - 30s interval│    │ - Handle API  │        │  │
-│   │   │   WebSocket   │    │ - Report      │    │   requests    │        │  │
-│   │   │ - Maintain    │    │   cluster     │    │ - Forward to  │        │  │
-│   │   │   connection  │    │   status      │    │   local API   │        │  │
-│   │   │ - Auto        │    │               │    │   server      │        │  │
-│   │   │   reconnect   │    │               │    │               │        │  │
-│   │   └───────────────┘    └───────────────┘    └───────────────┘        │  │
-│   │                                                                        │  │
-│   └────────────────────────────────────────────────────────────────────────┘  │
-│                                                                              │
-│                          ┌───────────────────┐                              │
-│                          │  Local API Server │                              │
-│                          │                   │                              │
-│                          │  kubernetes.      │                              │
-│                          │  default.svc      │                              │
-│                          └───────────────────┘                              │
-│                                                                              │
-└──────────────────────────────────────────────────────────────────────────────┘
-```
+![Edge Architecture](images/edge_arch.png)
 
 ## Tunnel Protocol
 

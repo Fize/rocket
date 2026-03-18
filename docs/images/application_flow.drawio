@@ -1,0 +1,109 @@
+<mxfile host="Electron" modified="2023-11-01T00:00:00.000Z" agent="Mozilla/5.0" version="21.6.8" type="device">
+  <diagram id="ApplicationFlow" name="ApplicationFlow">
+    <mxGraphModel dx="1422" dy="798" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0" defaultFontFamily="Noto Sans JP">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="2" value="User creates Application" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontFamily=Noto Sans JP;" parent="1" vertex="1">
+          <mxGeometry x="400" y="40" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="3" value="" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#666666;fontSize=16;fontFamily=Noto Sans JP;labelBackgroundColor=none;" parent="1" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="500" y="100" as="sourcePoint" />
+            <mxPoint x="500" y="140" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="4" value="API Server&lt;br&gt;(etcd storage)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=middle;align=center;fontSize=16;fontFamily=Noto Sans JP;" parent="1" vertex="1">
+          <mxGeometry x="400" y="140" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="5" value="Watch" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontFamily=Noto Sans JP;" parent="1" vertex="1">
+          <mxGeometry x="510" y="210" width="80" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="6" value="" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#666666;fontSize=16;fontFamily=Noto Sans JP;labelBackgroundColor=none;" parent="1" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="500" y="200" as="sourcePoint" />
+            <mxPoint x="500" y="260" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="7" value="Application Reconciler" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=middle;align=center;fontSize=16;fontFamily=Noto Sans JP;" parent="1" vertex="1">
+          <mxGeometry x="400" y="260" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="8" value="" style="endArrow=none;html=1;rounded=0;strokeWidth=2;strokeColor=#666666;" parent="1" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="500" y="320" as="sourcePoint" />
+            <mxPoint x="500" y="360" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="9" value="" style="endArrow=none;html=1;rounded=0;strokeWidth=2;strokeColor=#666666;" parent="1" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="300" y="360" as="sourcePoint" />
+            <mxPoint x="700" y="360" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="10" value="" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#666666;fontSize=16;fontFamily=Noto Sans JP;labelBackgroundColor=none;" parent="1" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="300" y="360" as="sourcePoint" />
+            <mxPoint x="300" y="400" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="11" value="" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#666666;fontSize=16;fontFamily=Noto Sans JP;labelBackgroundColor=none;" parent="1" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="700" y="360" as="sourcePoint" />
+            <mxPoint x="700" y="400" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="12" value="Scheduler" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=middle;align=center;fontSize=16;fontFamily=Noto Sans JP;" parent="1" vertex="1">
+          <mxGeometry x="200" y="400" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="13" value="Dispatcher" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=middle;align=center;fontSize=16;fontFamily=Noto Sans JP;" parent="1" vertex="1">
+          <mxGeometry x="600" y="400" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="14" value="" style="endArrow=none;html=1;rounded=0;strokeWidth=2;strokeColor=#666666;" parent="1" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="300" y="460" as="sourcePoint" />
+            <mxPoint x="300" y="500" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="15" value="" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#666666;fontSize=16;fontFamily=Noto Sans JP;labelBackgroundColor=none;" parent="1" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="300" y="500" as="sourcePoint" />
+            <mxPoint x="500" y="500" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="16" value="" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#666666;fontSize=16;fontFamily=Noto Sans JP;labelBackgroundColor=none;" parent="1" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="700" y="460" as="sourcePoint" />
+            <mxPoint x="700" y="500" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="17" value="" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#666666;fontSize=16;fontFamily=Noto Sans JP;labelBackgroundColor=none;" parent="1" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="700" y="500" as="sourcePoint" />
+            <mxPoint x="500" y="500" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="18" value="" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#666666;fontSize=16;fontFamily=Noto Sans JP;labelBackgroundColor=none;" parent="1" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="500" y="500" as="sourcePoint" />
+            <mxPoint x="500" y="560" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="19" value="Select and distribute" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontFamily=Noto Sans JP;" parent="1" vertex="1">
+          <mxGeometry x="510" y="510" width="160" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="20" value="Member Cluster A" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#666666;strokeWidth=2;verticalAlign=top;spacingTop=10;fontSize=18;fontFamily=Noto Sans JP;" parent="1" vertex="1">
+          <mxGeometry x="160" y="560" width="280" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="21" value="Deployment&lt;br&gt;replicas: 3" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=middle;align=center;fontSize=16;fontFamily=Noto Sans JP;" parent="1" vertex="1">
+          <mxGeometry x="200" y="620" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="22" value="Member Cluster B" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#666666;strokeWidth=2;verticalAlign=top;spacingTop=10;fontSize=18;fontFamily=Noto Sans JP;" parent="1" vertex="1">
+          <mxGeometry x="560" y="560" width="280" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="23" value="Deployment&lt;br&gt;replicas: 3" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=middle;align=center;fontSize=16;fontFamily=Noto Sans JP;" parent="1" vertex="1">
+          <mxGeometry x="600" y="620" width="200" height="80" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

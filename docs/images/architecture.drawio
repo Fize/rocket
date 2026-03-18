@@ -1,0 +1,67 @@
+<mxfile host="Electron" modified="2023-11-01T00:00:00.000Z" agent="Mozilla/5.0" version="21.6.8" type="device">
+  <diagram id="arch" name="Architecture">
+    <mxGraphModel dx="1422" dy="798" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0" defaultFontFamily="Noto Sans JP">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="2" value="Hub Mode (Direct API)" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#666666;fontSize=16;fontFamily=Noto Sans JP;labelBackgroundColor=none;" parent="1" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="260" y="620" as="sourcePoint" />
+            <mxPoint x="260" y="750" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="3" value="Edge Mode (Tunnel)" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#666666;fontSize=16;fontFamily=Noto Sans JP;labelBackgroundColor=none;" parent="1" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="770" y="620" as="sourcePoint" />
+            <mxPoint x="770" y="750" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="4" value="Hub Cluster" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#666666;strokeWidth=2;verticalAlign=top;spacingTop=10;fontSize=18;fontFamily=Noto Sans JP;" parent="1" vertex="1">
+          <mxGeometry x="40" y="40" width="960" height="580" as="geometry" />
+        </mxCell>
+        <mxCell id="5" value="Manager" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;verticalAlign=top;spacingTop=10;fontSize=16;fontStyle=1;fontFamily=Noto Sans JP;" parent="1" vertex="1">
+          <mxGeometry x="80" y="80" width="880" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="6" value="Scheduler&lt;br&gt;&lt;br&gt;- Filter&lt;br&gt;- Score&lt;br&gt;- Select" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;spacingTop=10;spacingLeft=10;spacingRight=10;align=left;fontSize=16;fontFamily=Noto Sans JP;" parent="1" vertex="1">
+          <mxGeometry x="120" y="120" width="240" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="7" value="Dispatcher&lt;br&gt;&lt;br&gt;- Generate&lt;br&gt;- Distribute&lt;br&gt;- Override" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;spacingTop=10;spacingLeft=10;spacingRight=10;align=left;fontSize=16;fontFamily=Noto Sans JP;" parent="1" vertex="1">
+          <mxGeometry x="400" y="120" width="240" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="8" value="Status Aggregator&lt;br&gt;&lt;br&gt;- Collect status&lt;br&gt;- Aggregate health&lt;br&gt;- Update Application" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;spacingTop=10;spacingLeft=10;spacingRight=10;align=left;fontSize=16;fontFamily=Noto Sans JP;" parent="1" vertex="1">
+          <mxGeometry x="680" y="120" width="240" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="9" value="Tunnel Server" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;verticalAlign=top;spacingTop=10;fontSize=16;fontStyle=1;fontFamily=Noto Sans JP;" parent="1" vertex="1">
+          <mxGeometry x="80" y="310" width="880" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="10" value="WebSocket&lt;br&gt;Listener" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=16;fontFamily=Noto Sans JP;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="120" y="360" width="240" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="11" value="Agent Sessions&lt;br&gt;&lt;br&gt;cluster-a: connected&lt;br&gt;cluster-b: connected" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;spacingTop=10;spacingLeft=10;spacingRight=10;align=left;fontSize=16;fontFamily=Noto Sans JP;" parent="1" vertex="1">
+          <mxGeometry x="400" y="360" width="520" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="12" value="CRDs: Application | ManagedCluster | Workspace" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=16;fontFamily=Noto Sans JP;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="80" y="540" width="880" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="13" value="Member Cluster (Hub)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#666666;strokeWidth=2;verticalAlign=top;spacingTop=10;fontSize=18;fontFamily=Noto Sans JP;" parent="1" vertex="1">
+          <mxGeometry x="40" y="750" width="440" height="260" as="geometry" />
+        </mxCell>
+        <mxCell id="14" value="Direct access&lt;br&gt;via kubeconfig" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;spacingTop=10;spacingLeft=10;spacingRight=10;align=left;fontSize=16;fontFamily=Noto Sans JP;" parent="1" vertex="1">
+          <mxGeometry x="80" y="800" width="360" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="15" value="Native Workloads:&lt;br&gt;- Deployment&lt;br&gt;- Job/CronJob&lt;br&gt;- Service" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;spacingTop=10;spacingLeft=10;spacingRight=10;align=left;fontSize=16;fontFamily=Noto Sans JP;" parent="1" vertex="1">
+          <mxGeometry x="80" y="900" width="360" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="16" value="Member Cluster (Edge)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#666666;strokeWidth=2;verticalAlign=top;spacingTop=10;fontSize=18;fontFamily=Noto Sans JP;" parent="1" vertex="1">
+          <mxGeometry x="540" y="750" width="460" height="260" as="geometry" />
+        </mxCell>
+        <mxCell id="17" value="Rocket Agent&lt;br&gt;&lt;br&gt;- Tunnel Client&lt;br&gt;- Heartbeat&lt;br&gt;- Local Executor" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;spacingTop=10;spacingLeft=10;spacingRight=10;align=left;fontSize=16;fontFamily=Noto Sans JP;" parent="1" vertex="1">
+          <mxGeometry x="580" y="800" width="380" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="18" value="Native Workloads" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;spacingTop=10;spacingLeft=10;spacingRight=10;align=left;fontSize=16;fontFamily=Noto Sans JP;" parent="1" vertex="1">
+          <mxGeometry x="580" y="930" width="380" height="60" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

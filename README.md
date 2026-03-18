@@ -21,47 +21,7 @@
 
 Rocket adopts a Hub-Spoke architecture to manage multi-cluster environments efficiently.
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              Hub Cluster                                     │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                          Manager                                      │   │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐  │   │
-│  │  │  Scheduler   │  │  Dispatcher  │  │   Status Aggregator      │  │   │
-│  │  │              │  │              │  │                          │  │   │
-│  │  │ - Filter     │  │ - Generate   │  │ - Collect cluster status │  │   │
-│  │  │ - Score      │  │ - Distribute │  │ - Aggregate health       │  │   │
-│  │  │ - Select     │  │ - Override   │  │ - Update Application     │  │   │
-│  │  └──────────────┘  └──────────────┘  └──────────────────────────┘  │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                       Tunnel Server                                   │   │
-│  │  ┌──────────────┐  ┌──────────────────────────────────────────┐    │   │
-│  │  │  WebSocket   │  │  Agent Sessions                          │    │   │
-│  │  │  Listener    │──│  cluster-a: connected                    │    │   │
-│  │  │              │  │  cluster-b: connected                    │    │   │
-│  │  └──────────────┘  └──────────────────────────────────────────┘    │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  CRDs: Application | ManagedCluster | Workspace                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────────────┘
-           │                                              │
-           │ Hub Mode (Direct API)          Edge Mode (Tunnel)
-           ▼                                              ▼
-┌─────────────────────────┐                ┌─────────────────────────┐
-│   Member Cluster (Hub)   │                │  Member Cluster (Edge)   │
-│  ┌───────────────────┐  │                │  ┌───────────────────┐  │
-│  │ Direct kubeconfig │  │                │  │   Rocket Agent    │  │
-│  │ access from Hub   │  │                │  │                   │  │
-│  └───────────────────┘  │                │  │ - Tunnel Client   │  │
-│                         │                │  │ - Heartbeat       │  │
-│  Native Workloads:      │                │  │ - Local Executor  │  │
-│  - Deployment           │                │  └───────────────────┘  │
-│  - Job/CronJob          │                │                         │
-│  - Service              │                │  Native Workloads       │
-└─────────────────────────┘                └─────────────────────────┘
-```
+![Architecture](docs/images/architecture.png)
 
 ### Components
 
