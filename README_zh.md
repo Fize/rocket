@@ -128,11 +128,11 @@ spec:
 
 | 文档 | 描述 |
 |----------|-------------|
-| [架构设计](doc/architecture_zh.md) | 详细的系统架构和设计 |
-| [调度器设计](doc/scheduler_zh.md) | 多集群调度框架 |
-| [拓扑分布](doc/topology_spread_zh.md) | 跨区域/可用区工作负载分布 |
-| [Edge 集群](doc/edge_zh.md) | 基于隧道的 Edge 集群管理 |
-| [API 参考](doc/api_zh.md) | CRD 规范和示例 |
+| [架构设计](docs/architecture_zh.md) | 详细的系统架构和设计 |
+| [调度器设计](docs/scheduler_zh.md) | 多集群调度框架 |
+| [拓扑分布](docs/topology_spread_zh.md) | 跨区域/可用区工作负载分布 |
+| [Edge 集群](docs/edge_zh.md) | 基于隧道的 Edge 集群管理 |
+| [API 参考](docs/api_zh.md) | CRD 规范和示例 |
 
 ## 🧪 测试
 

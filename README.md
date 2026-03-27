@@ -128,11 +128,11 @@ spec:
 
 | Document | Description |
 |----------|-------------|
-| [Architecture](doc/architecture.md) | Detailed system architecture and design |
-| [Scheduler Design](doc/scheduler.md) | Multi-cluster scheduling framework |
-| [Topology Spread](doc/topology_spread.md) | Cross-zone/region workload distribution |
-| [Edge Cluster](doc/edge.md) | Tunnel-based Edge cluster management |
-| [API Reference](doc/api.md) | CRD specifications and examples |
+| [Architecture](docs/architecture.md) | Detailed system architecture and design |
+| [Scheduler Design](docs/scheduler.md) | Multi-cluster scheduling framework |
+| [Topology Spread](docs/topology_spread.md) | Cross-zone/region workload distribution |
+| [Edge Cluster](docs/edge.md) | Tunnel-based Edge cluster management |
+| [API Reference](docs/api.md) | CRD specifications and examples |
 
 ## 🧪 Testing
 
