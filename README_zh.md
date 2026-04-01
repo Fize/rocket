@@ -16,6 +16,9 @@
 - **🎛️ 基于策略的覆盖**：无需复制 YAML 即可按集群自定义配置
 - **📊 全局状态聚合**：实时查看所有集群中的应用健康状态
 - **🔌 可扩展的插件系统**：支持 MCS、监控和自定义扩展的插件架构
+  - 内置 **Submariner Addon**: 提供跨集群服务发现和网络互通能力
+  - 支持多种网络模式: IPsec 隧道、WireGuard、VXLAN、扁平网络
+  - 自动化 ServiceExport/ServiceImport 管理
 
 ## 🏗️ 架构
 
@@ -123,6 +126,73 @@ spec:
           operator: In
           values: ["production"]
 ```
+
+## 🔌 内置 Addon
+
+### Submariner - 跨集群服务发现
+
+Rocket 内置了 **Submariner Addon** (mcs-lighthouse),提供跨集群服务发现和网络互通能力。
+
+#### 启用跨集群服务发现
+
+```yaml
+apiVersion: storage.rocket.io/v1alpha1
+kind: ManagedCluster
+metadata:
+  name: cluster-1
+  labels:
+    environment: production
+spec:
+  connectionMode: Hub
+  apiServer: https://cluster-1.example.com:6443
+  addons:
+    - name: mcs-lighthouse
+      enabled: true
+      config:
+        submarinerChartVersion: "0.23.0-m0"
+```
+
+#### 导出服务到其他集群
+
+```yaml
+# 在成员集群导出服务
+apiVersion: multicluster.x-k8s.io/v1alpha1
+kind: ServiceExport
+metadata:
+  name: my-service
+  namespace: default
+```
+
+#### 跨集群访问服务
+
+```bash
+# 使用 clusterset.local 域名访问
+kubectl run test --image=busybox --rm -it -- \
+  wget my-service.default.svc.clusterset.local
+```
+
+#### 网络模式说明
+
+Submariner 支持多种网络模式:
+
+| 模式 | 使用场景 | 配置 |
+|------|----------|------|
+| **IPsec 隧道** | 网络隔离环境(默认) | 无需额外配置 |
+| **扁平网络** | Pod CIDR 已跨集群路由 | 设置 `natEnabled: false` |
+| **VXLAN** | VPC Peering 环境 | 设置 `cableDriver: vxlan` |
+
+> ⚠️ **重要**: 扁平网络模式需要用户自行配置底层网络路由,确保 Pod CIDR 在所有集群间可路由。详见 [Addon 扩展设计](docs/addon_zh.md#submariner-使用指南)。
+
+#### 使用限制
+
+1. **网络要求**: 所有集群必须能与 Hub 集群通信
+2. **资源需求**: 每个集群约需 500m CPU 和 512Mi 内存
+3. **版本兼容**: 建议所有集群使用相同版本的 Submariner
+4. **集群 ID**: 每个集群必须有唯一的 `clusterId`
+
+> ⚠️ **重要声明**: Rocket 仅提供跨集群服务发现和网络互通的基础能力。对于复杂的网络场景（如扁平网络路由配置、跨云网络互通、混合云架构等），需要用户根据实际环境自行规划和维护底层网络设施。Rocket 不负责也不参与底层网络的路由配置、安全策略、网络设备管理等运维工作。
+
+更多详细信息请参考 [Addon 扩展设计](docs/addon_zh.md)
 
 ## 📖 文档
 

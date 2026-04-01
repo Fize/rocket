@@ -445,6 +445,235 @@ spec:
 |-----------|------|-----------|---------|
 | **mcs-lighthouse** | 跨集群服务发现 | Broker | Submariner Operator |
 
+## Submariner 使用指南
+
+### 网络模式说明
+
+Submariner 支持多种网络模式,根据你的基础设施选择合适的模式:
+
+| 模式 | 网络要求 | 适用场景 | 配置方式 |
+|------|----------|----------|----------|
+| **IPsec 隧道** | 集群间网络隔离 | 公有云、跨数据中心 | 默认模式,自动建立加密隧道 |
+| **WireGuard 隧道** | 集群间网络隔离 | 高性能需求场景 | 设置 `cableDriver: wireguard` |
+| **VXLAN 隧道** | 集群间可达 | VPC Peering、本地网络 | 设置 `cableDriver: vxlan` |
+| **扁平网络** | Pod CIDR 跨集群路由 | 已配置路由的扁平网络 | 设置 `natEnabled: false` |
+
+### 扁平网络配置
+
+如果你的集群已经配置了跨集群路由(Pod CIDR 在所有集群间可路由),可以使用扁平网络模式,无需建立隧道:
+
+#### 前提条件
+
+1. **Pod CIDR 路由已配置**: 所有集群的 Pod CIDR 已在底层网络中配置路由,Pod IP 跨集群直接可达
+2. **Service CIDR 可达**: ClusterIP Service 的 ClusterIP 在集群间可路由(可选,取决于需求)
+3. **无需 NAT**: 集群间通信不需要网络地址转换
+
+#### 配置方式
+
+在 ManagedCluster 中配置:
+
+```yaml
+apiVersion: storage.rocket.io/v1alpha1
+kind: ManagedCluster
+metadata:
+  name: cluster-1
+spec:
+  connectionMode: Hub
+  addons:
+    - name: mcs-lighthouse
+      enabled: true
+      config:
+        submarinerChartVersion: "0.23.0-m0"
+        # 通过 ConfigMap 自定义 values
+        submarinerValuesConfigMap: "submariner-values"
+        submarinerValuesNamespace: "default"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: submariner-values
+  namespace: default
+data:
+  values.yaml: |
+    submariner:
+      clusterId: cluster-1
+      natEnabled: false          # 禁用 NAT
+      serviceDiscovery: true      # 启用服务发现
+      # 不需要 cableDriver,或者设置为空
+```
+
+#### 工作原理
+
+在扁平网络模式下:
+
+1. **服务发现层 (Lighthouse)** 仍然需要,用于:
+   - ServiceExport/ServiceImport 同步
+   - DNS 解析 (`*.clusterset.local`)
+   - EndpointSlice 传播
+
+2. **数据平面层 (Gateway Engine)** 不需要:
+   - 不建立 IPsec/WireGuard/VXLAN 隧道
+   - 流量直接通过底层网络路由
+
+3. **Route Agent** 可能需要,取决于网络配置:
+   - 如果节点路由表需要更新,仍需 Route Agent
+   - 如果路由已配置,可以禁用 Route Agent
+
+#### 网络路由配置示例
+
+扁平网络需要在底层网络设备或云平台配置路由,例如:
+
+```bash
+# 集群 A (Pod CIDR: 10.244.0.0/16)
+# 在集群 B 的节点上添加路由
+ip route add 10.244.0.0/16 via <cluster-a-gateway-ip>
+
+# 集群 B (Pod CIDR: 10.245.0.0/16)
+# 在集群 A 的节点上添加路由
+ip route add 10.245.0.0/16 via <cluster-b-gateway-ip>
+```
+
+或在云平台 VPC 路由表中配置:
+
+| 目标 CIDR | 下一跳类型 | 下一跳 |
+|-----------|-----------|--------|
+| 10.244.0.0/16 | 对等连接 | cluster-a-vpc |
+| 10.245.0.0/16 | 对等连接 | cluster-b-vpc |
+
+> 💡 **注意**: 上述路由配置仅为示例，实际配置需要根据你的网络架构、云平台和基础设施进行调整。这些配置需要用户自行完成，Rocket 不会自动配置或管理这些底层网络路由。
+
+### 使用限制
+
+> ⚠️ **重要声明**: Rocket 仅提供跨集群服务发现和网络互通的基础能力。对于复杂的网络场景（如扁平网络路由配置、跨云网络互通、混合云架构等），需要用户根据实际环境自行规划和维护底层网络设施。Rocket 不负责也不参与底层网络的路由配置、安全策略、网络设备管理等运维工作。
+
+#### 1. 网络互通要求
+
+- **必须**: 所有成员集群与 Hub 集群网络互通(可访问 Hub API Server)
+- **必须**: Hub 集群可访问 Broker API Server
+- **视情况**: 成员集群间是否需要互通取决于网络模式
+
+#### 2. 资源需求
+
+| 组件 | CPU | 内存 | 说明 |
+|------|-----|------|------|
+| Broker | 100m | 128Mi | 运行在 Hub 集群 |
+| Operator | 100m | 128Mi | 每个成员集群 |
+| Lighthouse Agent | 50m | 64Mi | 每个成员集群 |
+| Lighthouse CoreDNS | 50m | 64Mi | 每个成员集群 |
+| Gateway Engine | 200m | 256Mi | 仅隧道模式需要 |
+| Route Agent | 50m | 64Mi | 每个节点,仅需要时 |
+
+#### 3. 端口要求
+
+隧道模式需要开放以下端口:
+
+| 端口 | 协议 | 用途 | 说明 |
+|------|------|------|------|
+| 4500/UDP | IPsec | IPsec NAT-T | 默认 IPsec 模式 |
+| 51871/UDP | WireGuard | WireGuard | WireGuard 模式 |
+| 4800/UDP | VXLAN | VXLAN | VXLAN 模式 |
+
+扁平网络模式无需额外端口。
+
+#### 4. 集群 ID 唯一性
+
+每个集群必须有唯一的 `clusterId`,用于区分不同集群的服务:
+
+```yaml
+# ❌ 错误: 多个集群使用相同 ID
+spec:
+  addons:
+    - name: mcs-lighthouse
+      config:
+        clusterId: "default"  # 所有集群都一样
+
+# ✅ 正确: 每个集群使用唯一 ID
+spec:
+  addons:
+    - name: mcs-lighthouse
+      config:
+        clusterId: "cluster-east-1"  # 唯一标识
+```
+
+#### 5. 版本兼容性
+
+- Broker 和 Agent 版本应保持一致
+- Rocket 内置的 Submariner 版本: `0.23.0-m0`
+- 支持通过配置覆盖版本(需确保兼容性)
+
+### 常见问题
+
+#### Q1: 如何判断是否需要扁平网络模式?
+
+**A**: 如果你的环境满足以下任一条件,可以考虑扁平网络:
+- 所有集群在同一 VPC/VNet,且 Pod CIDR 已路由
+- 使用 VPC Peering,且已配置跨 VPC 路由
+- 本地数据中心,网络设备已配置跨集群路由
+- 集群间网络已通过其他方式打通(如 SD-WAN)
+
+#### Q2: 扁平网络模式下还需要 Broker 吗?
+
+**A**: **是的,仍然需要 Broker**。Broker 用于:
+- 存储集群元数据
+- 同步 ServiceExport/ServiceImport
+- Lighthouse Agent 连接的中央 API Server
+
+扁平网络仅影响数据平面,不影响控制平面。
+
+#### Q3: 如何验证跨集群网络是否可达?
+
+**A**: 在扁平网络模式下,测试方法:
+
+```bash
+# 在集群 A 的节点上
+kubectl run test --image=busybox --rm -it -- ping <cluster-b-pod-ip>
+
+# 测试 DNS 解析
+kubectl run test --image=busybox --rm -it -- \
+  nslookup nginx.default.svc.clusterset.local
+
+# 测试服务访问
+kubectl run test --image=busybox --rm -it -- \
+  wget -qO- nginx.default.svc.clusterset.local
+```
+
+#### Q4: 跨集群服务访问失败怎么办?
+
+**A**: 按以下步骤排查:
+
+1. **检查服务导出**:
+   ```bash
+   kubectl get serviceexport -A
+   kubectl describe serviceexport nginx
+   ```
+
+2. **检查服务导入**:
+   ```bash
+   kubectl get serviceimport -A
+   kubectl describe serviceimport nginx
+   ```
+
+3. **检查 DNS 解析**:
+   ```bash
+   kubectl logs -n submariner-operator <lighthouse-coredns-pod>
+   ```
+
+4. **检查网络连通性**:
+   ```bash
+   # 查看 EndpointSlice 中的 Pod IP
+   kubectl get endpointslice -o yaml
+   
+   # 测试 Pod IP 是否可达
+   ping <remote-pod-ip>
+   ```
+
+5. **查看 Lighthouse Agent 日志**:
+   ```bash
+   kubectl logs -n submariner-operator <lighthouse-agent-pod>
+   ```
+
+> 💡 **提示**: 如果网络连通性问题涉及底层网络配置（如路由、防火墙、VPC Peering 等），需要用户自行排查和配置。Rocket 仅负责服务发现层面的功能，不负责底层网络的运维。
+
 ## 开发自定义 Addon
 
 ### 1. 实现 Addon 接口

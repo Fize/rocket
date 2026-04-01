@@ -16,6 +16,9 @@
 - **🎛️ Policy-Based Overrides**: Customize configurations per cluster without duplicating YAMLs
 - **📊 Global Status Aggregation**: Real-time visibility into application health across all clusters
 - **🔌 Extensible Addon System**: Plugin architecture for MCS, monitoring, and custom extensions
+  - Built-in **Submariner Addon**: Cross-cluster service discovery and networking
+  - Multiple network modes: IPsec tunnel, WireGuard, VXLAN, flat network
+  - Automated ServiceExport/ServiceImport management
 
 ## 🏗️ Architecture
 
@@ -123,6 +126,73 @@ spec:
           operator: In
           values: ["production"]
 ```
+
+## 🔌 Built-in Addons
+
+### Submariner - Cross-Cluster Service Discovery
+
+Rocket includes a built-in **Submariner Addon** (mcs-lighthouse) for cross-cluster service discovery and networking.
+
+#### Enable Cross-Cluster Service Discovery
+
+```yaml
+apiVersion: storage.rocket.io/v1alpha1
+kind: ManagedCluster
+metadata:
+  name: cluster-1
+  labels:
+    environment: production
+spec:
+  connectionMode: Hub
+  apiServer: https://cluster-1.example.com:6443
+  addons:
+    - name: mcs-lighthouse
+      enabled: true
+      config:
+        submarinerChartVersion: "0.23.0-m0"
+```
+
+#### Export Service to Other Clusters
+
+```yaml
+# Export service in member cluster
+apiVersion: multicluster.x-k8s.io/v1alpha1
+kind: ServiceExport
+metadata:
+  name: my-service
+  namespace: default
+```
+
+#### Access Cross-Cluster Service
+
+```bash
+# Access using clusterset.local domain
+kubectl run test --image=busybox --rm -it -- \
+  wget my-service.default.svc.clusterset.local
+```
+
+#### Network Modes
+
+Submariner supports multiple network modes:
+
+| Mode | Use Case | Configuration |
+|------|----------|---------------|
+| **IPsec Tunnel** | Network isolation (default) | No additional config needed |
+| **Flat Network** | Pod CIDR already routed across clusters | Set `natEnabled: false` |
+| **VXLAN** | VPC Peering environment | Set `cableDriver: vxlan` |
+
+> ⚠️ **Important**: Flat network mode requires users to configure underlying network routing to ensure Pod CIDRs are routable across all clusters. See [Addon Design](docs/addon.md#submariner-usage-guide) for details.
+
+#### Limitations
+
+1. **Network Requirements**: All clusters must communicate with Hub cluster
+2. **Resource Requirements**: ~500m CPU and 512Mi memory per cluster
+3. **Version Compatibility**: Same Submariner version across all clusters recommended
+4. **Cluster ID**: Each cluster must have a unique `clusterId`
+
+> ⚠️ **Important Notice**: Rocket provides only basic capabilities for cross-cluster service discovery and networking. For complex network scenarios (such as flat network routing configuration, cross-cloud network connectivity, hybrid cloud architectures, etc.), users are responsible for planning and maintaining the underlying network infrastructure based on their actual environment. Rocket does not handle or participate in the operations and maintenance of underlying network routing configuration, security policies, network device management, etc.
+
+For more details, see [Addon Design](docs/addon.md)
 
 ## 📖 Documentation
 

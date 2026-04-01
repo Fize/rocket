@@ -445,6 +445,231 @@ spec:
 |-----------|----------|--------------|-----------|
 | **mcs-lighthouse** | Cross-cluster service discovery | Broker | Submariner Operator |
 
+## Submariner Usage Guide
+
+### Network Modes
+
+Submariner supports multiple network modes. Choose the appropriate mode based on your infrastructure:
+
+| Mode | Network Requirements | Use Cases | Configuration |
+|------|---------------------|-----------|---------------|
+| **IPsec Tunnel** | Network isolation between clusters | Public cloud, cross-datacenter | Default mode, auto-established encrypted tunnel |
+| **WireGuard Tunnel** | Network isolation between clusters | High-performance scenarios | Set `cableDriver: wireguard` |
+| **VXLAN Tunnel** | Clusters reachable | VPC Peering, on-premises network | Set `cableDriver: vxlan` |
+| **Flat Network** | Pod CIDR routed across clusters | Pre-configured flat network | Set `natEnabled: false` |
+
+### Flat Network Configuration
+
+If your clusters already have cross-cluster routing configured (Pod CIDRs are routable across all clusters), you can use flat network mode without establishing tunnels:
+
+#### Prerequisites
+
+1. **Pod CIDR Routing Configured**: All clusters' Pod CIDRs have routing configured in the underlying network, Pod IPs are directly reachable across clusters
+2. **Service CIDR Reachable**: ClusterIP Service's ClusterIP is routable across clusters (optional, depends on requirements)
+3. **No NAT Required**: No network address translation needed for inter-cluster communication
+
+#### Configuration
+
+Configure in ManagedCluster:
+
+```yaml
+apiVersion: storage.rocket.io/v1alpha1
+kind: ManagedCluster
+metadata:
+  name: cluster-1
+spec:
+  connectionMode: Hub
+  addons:
+    - name: mcs-lighthouse
+      enabled: true
+      config:
+        submarinerChartVersion: "0.23.0-m0"
+        # Customize values via ConfigMap
+        submarinerValuesConfigMap: "submariner-values"
+        submarinerValuesNamespace: "default"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: submariner-values
+  namespace: default
+data:
+  values.yaml: |
+    submariner:
+      clusterId: cluster-1
+      natEnabled: false          # Disable NAT
+      serviceDiscovery: true      # Enable service discovery
+      # No cableDriver needed, or set to empty
+```
+
+#### How It Works
+
+In flat network mode:
+
+1. **Service Discovery Layer (Lighthouse)** is still required for:
+   - ServiceExport/ServiceImport synchronization
+   - DNS resolution (`*.clusterset.local`)
+   - EndpointSlice propagation
+
+2. **Data Plane Layer (Gateway Engine)** is not needed:
+   - No IPsec/WireGuard/VXLAN tunnels established
+   - Traffic routes directly through underlying network
+
+3. **Route Agent** may be needed, depending on network configuration:
+   - If node routing tables need updates, Route Agent is still required
+   - If routing is already configured, Route Agent can be disabled
+
+#### Network Routing Configuration Example
+
+Flat network requires configuring routes on underlying network devices or cloud platforms, for example:
+
+```bash
+# Cluster A (Pod CIDR: 10.244.0.0/16)
+# Add route on Cluster B nodes
+ip route add 10.244.0.0/16 via <cluster-a-gateway-ip>
+
+# Cluster B (Pod CIDR: 10.245.0.0/16)
+# Add route on Cluster A nodes
+ip route add 10.245.0.0/16 via <cluster-b-gateway-ip>
+```
+
+Or configure in cloud platform VPC route tables:
+
+| Destination CIDR | Next Hop Type | Next Hop |
+|-----------------|---------------|----------|
+| 10.244.0.0/16 | Peering Connection | cluster-a-vpc |
+| 10.245.0.0/16 | Peering Connection | cluster-b-vpc |
+
+### Limitations
+
+#### 1. Network Connectivity Requirements
+
+- **Required**: All member clusters can communicate with Hub cluster (can access Hub API Server)
+- **Required**: Hub cluster can access Broker API Server
+- **Conditional**: Whether member clusters need to communicate with each other depends on network mode
+
+#### 2. Resource Requirements
+
+| Component | CPU | Memory | Notes |
+|-----------|-----|--------|-------|
+| Broker | 100m | 128Mi | Runs on Hub cluster |
+| Operator | 100m | 128Mi | Each member cluster |
+| Lighthouse Agent | 50m | 64Mi | Each member cluster |
+| Lighthouse CoreDNS | 50m | 64Mi | Each member cluster |
+| Gateway Engine | 200m | 256Mi | Tunnel mode only |
+| Route Agent | 50m | 64Mi | Each node, only when needed |
+
+#### 3. Port Requirements
+
+Tunnel mode requires opening the following ports:
+
+| Port | Protocol | Purpose | Notes |
+|------|----------|---------|-------|
+| 4500/UDP | IPsec | IPsec NAT-T | Default IPsec mode |
+| 51871/UDP | WireGuard | WireGuard | WireGuard mode |
+| 4800/UDP | VXLAN | VXLAN | VXLAN mode |
+
+Flat network mode requires no additional ports.
+
+#### 4. Cluster ID Uniqueness
+
+Each cluster must have a unique `clusterId` to distinguish services from different clusters:
+
+```yaml
+# ❌ Wrong: Multiple clusters use the same ID
+spec:
+  addons:
+    - name: mcs-lighthouse
+      config:
+        clusterId: "default"  # Same for all clusters
+
+# ✅ Correct: Each cluster uses a unique ID
+spec:
+  addons:
+    - name: mcs-lighthouse
+      config:
+        clusterId: "cluster-east-1"  # Unique identifier
+```
+
+#### 5. Version Compatibility
+
+- Broker and Agent versions should be consistent
+- Submariner version built into Rocket: `0.23.0-m0`
+- Supports overriding version via configuration (ensure compatibility)
+
+### FAQ
+
+#### Q1: How to determine if flat network mode is needed?
+
+**A**: Consider flat network if your environment meets any of these conditions:
+- All clusters in the same VPC/VNet with Pod CIDRs routed
+- Using VPC Peering with cross-VPC routing configured
+- On-premises datacenter with network devices configured for cross-cluster routing
+- Inter-cluster network connected through other means (e.g., SD-WAN)
+
+#### Q2: Is Broker still needed in flat network mode?
+
+**A**: **Yes, Broker is still required**. Broker is used for:
+- Storing cluster metadata
+- Synchronizing ServiceExport/ServiceImport
+- Central API Server for Lighthouse Agent connections
+
+Flat network only affects the data plane, not the control plane.
+
+#### Q3: How to verify cross-cluster network reachability?
+
+**A**: In flat network mode, test with:
+
+```bash
+# On Cluster A node
+kubectl run test --image=busybox --rm -it -- ping <cluster-b-pod-ip>
+
+# Test DNS resolution
+kubectl run test --image=busybox --rm -it -- \
+  nslookup nginx.default.svc.clusterset.local
+
+# Test service access
+kubectl run test --image=busybox --rm -it -- \
+  wget -qO- nginx.default.svc.clusterset.local
+```
+
+#### Q4: What to do if cross-cluster service access fails?
+
+**A**: Troubleshoot with these steps:
+
+1. **Check service export**:
+   ```bash
+   kubectl get serviceexport -A
+   kubectl describe serviceexport nginx
+   ```
+
+2. **Check service import**:
+   ```bash
+   kubectl get serviceimport -A
+   kubectl describe serviceimport nginx
+   ```
+
+3. **Check DNS resolution**:
+   ```bash
+   kubectl logs -n submariner-operator <lighthouse-coredns-pod>
+   ```
+
+4. **Check network connectivity**:
+   ```bash
+   # View Pod IPs in EndpointSlice
+   kubectl get endpointslice -o yaml
+   
+   # Test if Pod IP is reachable
+   ping <remote-pod-ip>
+   ```
+
+5. **Check Lighthouse Agent logs**:
+   ```bash
+   kubectl logs -n submariner-operator <lighthouse-agent-pod>
+   ```
+
+> 💡 **Tip**: If network connectivity issues involve underlying network configuration (such as routing, firewalls, VPC Peering, etc.), users need to troubleshoot and configure them themselves. Rocket is only responsible for service discovery functionality and does not handle underlying network operations.
+
 ## Developing Custom Addons
 
 ### 1. Implement Addon Interface
