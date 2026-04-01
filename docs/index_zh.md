@@ -10,6 +10,7 @@
 |------|------|----------|
 | [架构设计](architecture_zh.md) | 系统整体架构、核心组件、数据流 | 开发者、架构师 |
 | [调度器设计](scheduler_zh.md) | 多集群调度框架、插件机制 | 开发者 |
+| [Addon 扩展设计](addon_zh.md) | 插件机制、Submariner 集成、自定义 Addon 开发 | 开发者、架构师 |
 | [拓扑分布指南](topology_spread_zh.md) | 跨区域工作负载分布插件详解 | 开发者、运维 |
 | [Edge 集群管理](edge_zh.md) | 隧道连接、Bootstrap Token、Agent 部署 | 运维、开发者 |
 | [API 参考](api_zh.md) | CRD 规范、字段说明、使用示例 | 所有用户 |
@@ -29,7 +30,8 @@
 想要深入了解 Rocket 的实现细节：
 
 1. **[调度器设计](scheduler_zh.md)** - 理解多集群调度的核心算法
-2. **[拓扑分布指南](topology_spread_zh.md)** - 学习跨区域高可用部署
+2. **[Addon 扩展设计](addon_zh.md)** - 学习插件机制和 Submariner 集成
+3. **[拓扑分布指南](topology_spread_zh.md)** - 学习跨区域高可用部署
 
 ### 📋 常见场景
 
@@ -40,6 +42,8 @@
 | 接入 NAT 后的边缘集群 | [Edge 集群管理](edge_zh.md) |
 | 配置跨区域高可用 | [拓扑分布指南](topology_spread_zh.md) |
 | 理解调度决策 | [调度器设计](scheduler_zh.md) |
+| 集成 Submariner | [Addon 扩展设计](addon_zh.md#submariner-接入实现) |
+| 开发自定义 Addon | [Addon 扩展设计](addon_zh.md#开发自定义-addon) |
 
 ## 项目链接
 

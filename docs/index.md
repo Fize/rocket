@@ -40,6 +40,8 @@ For understanding Rocket's implementation details:
 | Onboard edge cluster behind NAT | [Edge Cluster](edge.md) |
 | Configure cross-region HA | [Topology Spread](topology_spread.md) |
 | Understand scheduling decisions | [Scheduler Design](scheduler.md) |
+| Integrate Submariner | [Addon Extension - Submariner](addon.md#submariner-integration-implementation) |
+| Develop custom Addon | [Addon Extension - Development](addon.md#developing-custom-addons) |
 
 ## Project Links
 
