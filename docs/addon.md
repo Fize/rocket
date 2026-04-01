@@ -444,6 +444,7 @@ spec:
 | Addon Name | Function | Manager Side | Agent Side |
 |-----------|----------|--------------|-----------|
 | **mcs-lighthouse** | Cross-cluster service discovery | Broker | Submariner Operator |
+| **victoriametrics** | Multi-cluster monitoring | VictoriaMetrics Single | vmagent |
 
 ## Submariner Usage Guide
 
@@ -669,6 +670,134 @@ kubectl run test --image=busybox --rm -it -- \
    ```
 
 > 💡 **Tip**: If network connectivity issues involve underlying network configuration (such as routing, firewalls, VPC Peering, etc.), users need to troubleshoot and configure them themselves. Rocket is only responsible for service discovery functionality and does not handle underlying network operations.
+
+## VictoriaMetrics Usage Guide
+
+### Overview
+
+VictoriaMetrics Addon deploys monitoring system for multi-cluster environments with Hub-Spoke architecture:
+
+- **Hub side**: Deploys VictoriaMetrics single-node as centralized monitoring storage
+- **Edge side**: Deploys vmagent to collect local metrics and push to Hub
+
+### Important Notes
+
+⚠️ **VictoriaMetrics Single includes built-in agent capabilities**: The VictoriaMetrics single-node deployment includes vmagent-like functionality for data ingestion. Therefore, **no separate vmagent is deployed on Hub clusters** - only on Edge clusters.
+
+**If using your own Prometheus or other VictoriaMetrics cluster**, you need to:
+1. Deploy and configure vmagent manually on Hub cluster if needed
+2. Configure vmagent's `remoteWrite` URL to point to your external storage
+3. Ensure network connectivity between vmagent and target storage
+
+### Basic Configuration
+
+Enable VictoriaMetrics on Hub cluster:
+
+```yaml
+apiVersion: storage.rocket.io/v1alpha1
+kind: ManagedCluster
+metadata:
+  name: hub-cluster
+spec:
+  connectionMode: Hub
+  addons:
+    - name: victoriametrics
+      enabled: true
+```
+
+Enable vmagent on Edge cluster with Hub's VM URL:
+
+```yaml
+apiVersion: storage.rocket.io/v1alpha1
+kind: ManagedCluster
+metadata:
+  name: edge-cluster
+spec:
+  connectionMode: Edge
+  addons:
+    - name: victoriametrics
+      enabled: true
+      config:
+        victoriametricsURL: "http://victoria-metrics-victoria-metrics-single.victoriametrics.svc.cluster.local:8428"
+```
+
+### Configuration Options
+
+| Config Key | Description | Default |
+|-----------|-------------|---------|
+| `vmChartVersion` | VictoriaMetrics chart version | `0.33.0` |
+| `vmAgentChartVersion` | vmagent chart version | `0.34.0` |
+| `vmStorageClass` | Persistent storage class for VictoriaMetrics | None (no persistence) |
+| `vmStorageSize` | Persistent storage size | `16Gi` |
+| `vmValuesConfigMap` | ConfigMap name for custom Helm values | - |
+| `victoriametricsURL` | VictoriaMetrics URL (auto-populated on Hub) | Auto-detected |
+
+### Storage Configuration
+
+By default, VictoriaMetrics uses emptyDir (no persistent storage). For production use:
+
+```yaml
+apiVersion: storage.rocket.io/v1alpha1
+kind: ManagedCluster
+metadata:
+  name: hub-cluster
+spec:
+  addons:
+    - name: victoriametrics
+      enabled: true
+      config:
+        vmStorageClass: "standard"
+        vmStorageSize: "50Gi"
+```
+
+### Custom Helm Values
+
+Customize via ConfigMap:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vm-values
+  namespace: default
+data:
+  values.yaml: |
+    server:
+      persistentVolume:
+        enabled: true
+        storageClassName: standard
+        size: 50Gi
+      resources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+---
+apiVersion: storage.rocket.io/v1alpha1
+kind: ManagedCluster
+metadata:
+  name: hub-cluster
+spec:
+  addons:
+    - name: victoriametrics
+      enabled: true
+      config:
+        vmValuesConfigMap: "vm-values"
+        vmValuesNamespace: "default"
+```
+
+### Verify Installation
+
+```bash
+# Check VictoriaMetrics on Hub
+kubectl get all -n victoriametrics
+
+# Check vmagent on Edge
+kubectl get all -n vm-agent
+
+# Query metrics
+kubectl port-forward -n victoriametrics svc/victoria-metrics-victoria-metrics-single 8428:8428
+curl http://localhost:8428/api/v1/query?query=up
+```
 
 ## Developing Custom Addons
 

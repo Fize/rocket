@@ -22,6 +22,7 @@ import (
 
 	"github.com/hex-techs/rocket/internal/addon"
 	_ "github.com/hex-techs/rocket/internal/addon/mcs"
+	_ "github.com/hex-techs/rocket/internal/addon/victoriametrics"
 	"github.com/hex-techs/rocket/internal/agent/cluster"
 	addoncontroller "github.com/hex-techs/rocket/internal/manager/addon"
 	"github.com/hex-techs/rocket/internal/manager/apiserver/handler"
@@ -35,6 +36,7 @@ import (
 	"github.com/hex-techs/rocket/internal/manager/workspace"
 	appsv1alpha1 "github.com/hex-techs/rocket/pkg/apis/apps/v1alpha1"
 	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
+	"github.com/hex-techs/rocket/pkg/constants"
 	"github.com/rancher/remotedialer"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -461,10 +463,10 @@ func (e *TestEnvironment) CreateEdgeCluster(t *testing.T, name string, labels ma
 		}
 		// Set credentials annotations (base64 encoded where needed)
 		if e.Config.BearerToken != "" {
-			got.Annotations[cluster.AnnotationCredentialsToken] = e.Config.BearerToken
+			got.Annotations[constants.AnnotationCredentialsToken] = e.Config.BearerToken
 		}
 		if len(e.Config.CAData) > 0 {
-			got.Annotations[cluster.AnnotationCredentialsCA] = base64.StdEncoding.EncodeToString(e.Config.CAData)
+			got.Annotations[constants.AnnotationCredentialsCA] = base64.StdEncoding.EncodeToString(e.Config.CAData)
 		}
 		if len(e.Config.CertData) > 0 {
 			got.Annotations["cluster.rocket.io/credentials-cert"] = base64.StdEncoding.EncodeToString(e.Config.CertData)
@@ -472,7 +474,7 @@ func (e *TestEnvironment) CreateEdgeCluster(t *testing.T, name string, labels ma
 		if len(e.Config.KeyData) > 0 {
 			got.Annotations["cluster.rocket.io/credentials-key"] = base64.StdEncoding.EncodeToString(e.Config.KeyData)
 		}
-		got.Annotations[cluster.AnnotationAPIServerURL] = e.Config.Host
+		got.Annotations[constants.AnnotationAPIServerURL] = e.Config.Host
 		got.Spec.APIServer = e.Config.Host
 		return e.Client.Update(ctx, &got) == nil, nil
 	})

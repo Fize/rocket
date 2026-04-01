@@ -444,6 +444,7 @@ spec:
 | Addon 名称 | 功能 | Manager 端 | Agent 端 |
 |-----------|------|-----------|---------|
 | **mcs-lighthouse** | 跨集群服务发现 | Broker | Submariner Operator |
+| **victoriametrics** | 多集群监控 | VictoriaMetrics Single | vmagent |
 
 ## Submariner 使用指南
 
@@ -673,6 +674,134 @@ kubectl run test --image=busybox --rm -it -- \
    ```
 
 > 💡 **提示**: 如果网络连通性问题涉及底层网络配置（如路由、防火墙、VPC Peering 等），需要用户自行排查和配置。Rocket 仅负责服务发现层面的功能，不负责底层网络的运维。
+
+## VictoriaMetrics 使用指南
+
+### 概述
+
+VictoriaMetrics Addon 在多集群环境中部署监控系统，采用 Hub-Spoke 架构：
+
+- **Hub 端**：部署 VictoriaMetrics 单节点作为中心化监控存储
+- **Edge 端**：部署 vmagent 采集本地指标并推送到 Hub
+
+### 重要说明
+
+⚠️ **VictoriaMetrics Single 内置了 agent 功能**：VictoriaMetrics 单节点部署包含了类似 vmagent 的数据摄取能力。因此，**Hub 集群不会部署单独的 vmagent** - 只有需要采集和转发指标的 Edge 集群才会部署。
+
+**如果您使用自己的 Prometheus 或其他 VictoriaMetrics 集群**，您需要：
+1. 根据需要在 Hub 集群上手动部署和配置 vmagent
+2. 配置 vmagent 的 `remoteWrite` URL 指向您外部的存储
+3. 确保 vmagent 与目标存储之间的网络连通性
+
+### 基本配置
+
+在 Hub 集群上启用 VictoriaMetrics：
+
+```yaml
+apiVersion: storage.rocket.io/v1alpha1
+kind: ManagedCluster
+metadata:
+  name: hub-cluster
+spec:
+  connectionMode: Hub
+  addons:
+    - name: victoriametrics
+      enabled: true
+```
+
+在 Edge 集群上启用 vmagent 并连接 Hub：
+
+```yaml
+apiVersion: storage.rocket.io/v1alpha1
+kind: ManagedCluster
+metadata:
+  name: edge-cluster
+spec:
+  connectionMode: Edge
+  addons:
+    - name: victoriametrics
+      enabled: true
+      config:
+        victoriametricsURL: "http://victoria-metrics-victoria-metrics-single.victoriametrics.svc.cluster.local:8428"
+```
+
+### 配置选项
+
+| 配置键 | 描述 | 默认值 |
+|-------|------|--------|
+| `vmChartVersion` | VictoriaMetrics chart 版本 | `0.33.0` |
+| `vmAgentChartVersion` | vmagent chart 版本 | `0.34.0` |
+| `vmStorageClass` | VictoriaMetrics 持久化存储类 | 无（不持久化） |
+| `vmStorageSize` | 持久化存储大小 | `16Gi` |
+| `vmValuesConfigMap` | 自定义 Helm values 的 ConfigMap 名称 | - |
+| `victoriametricsURL` | VictoriaMetrics URL（Hub 上自动填充） | 自动检测 |
+
+### 存储配置
+
+默认情况下，VictoriaMetrics 使用 emptyDir（不持久化存储）。生产环境建议配置持久化：
+
+```yaml
+apiVersion: storage.rocket.io/v1alpha1
+kind: ManagedCluster
+metadata:
+  name: hub-cluster
+spec:
+  addons:
+    - name: victoriametrics
+      enabled: true
+      config:
+        vmStorageClass: "standard"
+        vmStorageSize: "50Gi"
+```
+
+### 自定义 Helm Values
+
+通过 ConfigMap 自定义配置：
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vm-values
+  namespace: default
+data:
+  values.yaml: |
+    server:
+      persistentVolume:
+        enabled: true
+        storageClassName: standard
+        size: 50Gi
+      resources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+---
+apiVersion: storage.rocket.io/v1alpha1
+kind: ManagedCluster
+metadata:
+  name: hub-cluster
+spec:
+  addons:
+    - name: victoriametrics
+      enabled: true
+      config:
+        vmValuesConfigMap: "vm-values"
+        vmValuesNamespace: "default"
+```
+
+### 验证安装
+
+```bash
+# 检查 Hub 上的 VictoriaMetrics
+kubectl get all -n victoriametrics
+
+# 检查 Edge 上的 vmagent
+kubectl get all -n vm-agent
+
+# 查询指标
+kubectl port-forward -n victoriametrics svc/victoria-metrics-victoria-metrics-single 8428:8428
+curl http://localhost:8428/api/v1/query?query=up
+```
 
 ## 开发自定义 Addon
 

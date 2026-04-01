@@ -123,6 +123,10 @@ func TestRocketE2E(t *testing.T) {
 	t.Run("DaemonSetWorkload", func(t *testing.T) {
 		testDaemonSetWorkload(t, env)
 	})
+
+	t.Run("VictoriaMetricsAddon", func(t *testing.T) {
+		testVictoriaMetricsAddon(t, env)
+	})
 }
 
 // =============================================================================
