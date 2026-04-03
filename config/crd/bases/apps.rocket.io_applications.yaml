@@ -591,6 +591,160 @@ spec:
                     description: MinAvailable is the minimum number of available pods
                     x-kubernetes-int-or-string: true
                 type: object
+              rolloutStrategy:
+                description: |-
+                  RolloutStrategy defines the rollout strategy for the application
+                  When specified, kruise-rollout will be used to manage the deployment
+                properties:
+                  abTest:
+                    description: ABTest defines the A/B testing configuration
+                    properties:
+                      baselineCluster:
+                        description: BaselineCluster specifies the cluster that serves
+                          the baseline version
+                        type: string
+                      candidateClusters:
+                        description: CandidateClusters specifies the clusters that
+                          serve the candidate version
+                        items:
+                          type: string
+                        type: array
+                      trafficSplit:
+                        description: TrafficSplit specifies the percentage of traffic
+                          to route to candidate clusters
+                        format: int32
+                        maximum: 100
+                        minimum: 0
+                        type: integer
+                    required:
+                    - baselineCluster
+                    - candidateClusters
+                    - trafficSplit
+                    type: object
+                  blueGreen:
+                    description: BlueGreen defines the blue-green deployment configuration
+                    properties:
+                      activeService:
+                        description: ActiveService specifies the service name for
+                          the active (blue) environment
+                        type: string
+                      autoPromotionEnabled:
+                        description: AutoPromotionEnabled automatically promotes the
+                          preview environment to active
+                        type: boolean
+                      previewService:
+                        description: PreviewService specifies the service name for
+                          the preview (green) environment
+                        type: string
+                      scaleDownDelaySeconds:
+                        description: ScaleDownDelaySeconds specifies the time to wait
+                          before scaling down the old environment
+                        format: int32
+                        type: integer
+                    required:
+                    - activeService
+                    type: object
+                  canary:
+                    description: Canary defines the canary deployment configuration
+                    properties:
+                      steps:
+                        description: |-
+                          Steps define the sequence of steps for the canary deployment
+                          Each step specifies the percentage of traffic to route to the canary
+                        items:
+                          description: CanaryStep defines a single step in the canary
+                            deployment
+                          properties:
+                            pause:
+                              description: Pause specifies how long to pause at this
+                                step
+                              properties:
+                                duration:
+                                  description: Duration specifies the duration of
+                                    the pause in seconds
+                                  format: int32
+                                  type: integer
+                              type: object
+                            weight:
+                              description: Weight is the percentage of traffic to
+                                route to canary pods
+                              format: int32
+                              maximum: 100
+                              minimum: 0
+                              type: integer
+                          required:
+                          - weight
+                          type: object
+                        type: array
+                      trafficRouting:
+                        description: TrafficRouting specifies how to route traffic
+                          to canary pods
+                        properties:
+                          istio:
+                            description: Istio specifies Istio traffic routing configuration
+                            properties:
+                              destinationRule:
+                                description: DestinationRule specifies the DestinationRule
+                                  name
+                                type: string
+                              virtualService:
+                                description: VirtualService specifies the VirtualService
+                                  name
+                                type: string
+                            required:
+                            - virtualService
+                            type: object
+                          nginx:
+                            description: Nginx specifies NGINX Ingress traffic routing
+                              configuration
+                            properties:
+                              annotationPrefix:
+                                description: AnnotationPrefix specifies the NGINX
+                                  annotation prefix
+                                type: string
+                              ingress:
+                                description: Ingress specifies the Ingress resource
+                                  name
+                                type: string
+                            required:
+                            - ingress
+                            type: object
+                        type: object
+                    required:
+                    - steps
+                    type: object
+                  clusterOrder:
+                    description: ClusterOrder defines how clusters are ordered during
+                      rollout
+                    properties:
+                      clusters:
+                        description: |-
+                          Clusters specifies the explicit order of clusters for sequential rollout
+                          Only used when Type is Sequential
+                        items:
+                          type: string
+                        type: array
+                      type:
+                        description: Type specifies the ordering type (Sequential
+                          or Parallel)
+                        type: string
+                    required:
+                    - type
+                    type: object
+                  paused:
+                    description: Paused indicates if the rollout is paused
+                    type: boolean
+                  rollback:
+                    description: Rollback indicates if we should rollback to the previous
+                      version
+                    type: boolean
+                  type:
+                    description: Type specifies the rollout type (Canary, BlueGreen,
+                      ABTest)
+                    type: string
+                required:
+                - type
+                type: object
               schedule:
                 description: Schedule allows specifying a cron schedule. Only applicable
                   for CronJob workload.
@@ -705,6 +859,49 @@ spec:
                       description: Replicas is the desired number of replicas
                       format: int32
                       type: integer
+                    rollout:
+                      description: Rollout contains the rollout status for this cluster
+                      properties:
+                        canaryReplicas:
+                          description: CanaryReplicas is the number of canary replicas
+                          format: int32
+                          type: integer
+                        currentStep:
+                          description: CurrentStep is the current step index (0-indexed)
+                          format: int32
+                          type: integer
+                        currentStepWeight:
+                          description: CurrentStepWeight is the weight percentage
+                            of the current step
+                          format: int32
+                          type: integer
+                        lastUpdateTime:
+                          description: LastUpdateTime is the last time the status
+                            was updated
+                          format: date-time
+                          type: string
+                        message:
+                          description: Message provides details about the current
+                            state
+                          type: string
+                        phase:
+                          description: Phase is the current phase of the rollout
+                          type: string
+                        readyReplicas:
+                          description: ReadyReplicas is the number of ready replicas
+                          format: int32
+                          type: integer
+                        stableReplicas:
+                          description: StableReplicas is the number of stable replicas
+                          format: int32
+                          type: integer
+                        updatedReplicas:
+                          description: UpdatedReplicas is the number of updated replicas
+                          format: int32
+                          type: integer
+                      required:
+                      - phase
+                      type: object
                   required:
                   - availableReplicas
                   - clusterName
@@ -786,17 +983,14 @@ spec:
                 description: GlobalReplicas is the total desired replicas
                 format: int32
                 type: integer
+              healthPhase:
+                description: HealthPhase is the current health phase of the application
+                type: string
               observedGeneration:
                 description: ObservedGeneration represents the .metadata.generation
                   that the condition was set based upon.
                 format: int64
                 type: integer
-              healthPhase:
-                description: HealthPhase is the current health phase of the application
-                type: string
-              schedulingPhase:
-                description: SchedulingPhase is the current scheduling lifecycle phase of the application
-                type: string
               placement:
                 description: Placement indicates where the application has been scheduled
                 properties:
@@ -820,6 +1014,10 @@ spec:
                       type: object
                     type: array
                 type: object
+              schedulingPhase:
+                description: SchedulingPhase is the current scheduling lifecycle phase
+                  of the application
+                type: string
             type: object
         type: object
     served: true

@@ -444,6 +444,7 @@ spec:
 | Addon Name | Function | Manager Side | Agent Side |
 |-----------|----------|--------------|-----------|
 | **mcs-lighthouse** | Cross-cluster service discovery | Broker | Submariner Operator |
+| **kruise-rollout** | Cross-cluster progressive rollout | Status coordination | kruise-rollout installation |
 | **victoriametrics** | Multi-cluster monitoring | VictoriaMetrics Single | vmagent |
 
 ## Submariner Usage Guide
@@ -671,6 +672,416 @@ kubectl run test --image=busybox --rm -it -- \
 
 > 💡 **Tip**: If network connectivity issues involve underlying network configuration (such as routing, firewalls, VPC Peering, etc.), users need to troubleshoot and configure them themselves. Rocket is only responsible for service discovery functionality and does not handle underlying network operations.
 
+## Kruise-Rollout Usage Guide
+
+### Overview
+
+Kruise-Rollout Addon provides cross-cluster progressive rollout capabilities for Rocket, supporting three rollout strategies: Canary, Blue-Green, and A/B Test. This Addon is built on [OpenKruise Rollout](https://openkruise.io/docs/rollout/overview), with Rocket responsible for coordinating multi-cluster rollout processes.
+
+### Architecture Design
+
+![Kruise-Rollout Architecture](images/kruise_rollout_architecture.drawio.png)
+
+### Enable Addon
+
+Enable kruise-rollout on member clusters:
+
+```yaml
+apiVersion: storage.rocket.io/v1alpha1
+kind: ManagedCluster
+metadata:
+  name: cluster-1
+spec:
+  connectionMode: Edge
+  addons:
+    - name: kruise-rollout
+      enabled: true
+      config:
+        chartVersion: "0.5.0"  # Optional, specify chart version
+```
+
+### Rollout Strategies
+
+#### 1. Canary
+
+Canary rollout supports multi-batch progressive updates, with each batch updating a percentage of Pods.
+
+**Basic Configuration**:
+
+```yaml
+apiVersion: apps.rocket.io/v1alpha1
+kind: Application
+metadata:
+  name: my-app
+spec:
+  workload:
+    apiVersion: apps/v1
+    kind: Deployment
+  replicas: 100
+  rolloutStrategy:
+    type: Canary
+    canary:
+      steps:
+        - weight: 20      # First batch: 20%
+          pause:
+            duration: 60  # Pause for 60 seconds
+        - weight: 50      # Second batch: 50%
+          pause:
+            duration: 60
+        - weight: 100     # Third batch: 100%
+```
+
+**Cross-Cluster Batched Rollout**:
+
+With `globalReplicaDistribution` configuration, Rocket automatically calculates the number of Pods to rollout in each cluster:
+
+```yaml
+apiVersion: apps.rocket.io/v1alpha1
+kind: Application
+metadata:
+  name: my-app
+spec:
+  replicas: 100
+  rolloutStrategy:
+    type: Canary
+    canary:
+      steps:
+        - weight: 20
+      globalReplicaDistribution:
+        mode: Equal  # or Weighted, Sequential
+```
+
+##### Distribution Modes
+
+| Mode | Description | Use Cases |
+|------|-------------|-----------|
+| **Equal** | Distribute equally across all clusters | Clusters with similar sizes |
+| **Weighted** | Distribute based on cluster weights | Clusters with different sizes |
+| **Sequential** | Rollout one cluster at a time | Strict control over rollout order |
+
+##### Example: Weighted Distribution
+
+```yaml
+globalReplicaDistribution:
+  mode: Weighted
+  clusterWeights:
+    - clusterName: cluster-a
+      weight: 30  # 30% of canary pods
+    - clusterName: cluster-b
+      weight: 70  # 70% of canary pods
+```
+
+##### Example: Sequential Rollout
+
+```yaml
+globalReplicaDistribution:
+  mode: Sequential
+---
+# Use with ClusterOrder
+clusterOrder:
+  type: Sequential
+  clusters:
+    - cluster-canary   # Rollout to canary cluster first
+    - cluster-prod-1   # Then production cluster 1
+    - cluster-prod-2   # Finally production cluster 2
+```
+
+#### 2. Blue-Green
+
+Blue-Green rollout creates a complete new version environment, and switches traffic after validation.
+
+```yaml
+apiVersion: apps.rocket.io/v1alpha1
+kind: Application
+metadata:
+  name: my-app
+spec:
+  rolloutStrategy:
+    type: BlueGreen
+    blueGreen:
+      activeService: my-app-active    # Current version service
+      previewService: my-app-preview  # New version preview service
+      autoPromotionEnabled: false     # Manual confirmation before switch
+      scaleDownDelaySeconds: 600      # Wait 10 minutes before scaling down old version
+```
+
+#### 3. A/B Test
+
+A/B Test uses different clusters as baseline and candidate versions for comparison testing.
+
+```yaml
+apiVersion: apps.rocket.io/v1alpha1
+kind: Application
+metadata:
+  name: my-app
+spec:
+  rolloutStrategy:
+    type: ABTest
+    abTest:
+      baselineCluster: cluster-stable      # Baseline version cluster
+      candidateClusters:                   # Candidate version clusters
+        - cluster-canary-1
+        - cluster-canary-2
+      trafficSplit: 30  # 30% traffic to candidate version
+```
+
+### Pod Count Calculation Logic
+
+#### Data Source
+
+Batched rollout is based on **desired replicas** (scheduler assignment), not actual running replicas:
+
+```
+Data Flow:
+Application.Spec.Replicas (Global desired)
+         ↓
+Placement.Topology[].Replicas (Per-cluster desired) ← Used for batch calculation
+         ↓
+ClustersStatus[].ReadyReplicas (Actually running)
+```
+
+#### Calculation Examples
+
+Assume configuration:
+- Global 100 replicas, rollout 20%
+- Cluster A expects 40 replicas
+- Cluster B expects 60 replicas
+
+**Equal Mode**:
+```
+Global canary = 100 × 20% = 20 pods
+Cluster A canary = 20 / 2 = 10 pods
+Cluster B canary = 20 / 2 = 10 pods
+```
+
+**Weighted Mode (A:30, B:70)**:
+```
+Cluster A canary = 20 × 30% = 6 pods
+Cluster B canary = 20 × 70% = 14 pods
+```
+
+**Proportional Mode (default, no GlobalReplicaDistribution)**:
+```
+Cluster A canary = 20 × 40/100 = 8 pods (proportional to desired replicas)
+Cluster B canary = 20 × 60/100 = 12 pods
+```
+
+### Traffic Routing
+
+Rocket only handles Pod count batching. **Traffic routing is controlled by users**. Can be implemented via:
+
+#### Istio Traffic Routing
+
+```yaml
+rolloutStrategy:
+  type: Canary
+  canary:
+    steps:
+      - weight: 20
+    trafficRouting:
+      istio:
+        virtualService: my-app-vs
+        destinationRule: my-app-dr
+```
+
+Users need to configure VirtualService traffic percentages in Lua or external systems.
+
+#### NGINX Ingress Traffic Routing
+
+```yaml
+rolloutStrategy:
+  type: Canary
+  canary:
+    steps:
+      - weight: 20
+    trafficRouting:
+      nginx:
+        ingress: my-app-ingress
+        annotationPrefix: nginx.ingress.kubernetes.io
+```
+
+### Important Notes
+
+#### 1. Rollout Controls Pod Count, Not Traffic Percentage
+
+> ⚠️ **Important**: Rocket's batched rollout controls **Pod count**, not traffic percentage. Traffic routing is controlled by users through Lua scripts or external systems (such as Istio, Nginx Ingress).
+
+This means:
+- `weight: 20` means creating 20% new version Pods
+- How traffic is distributed to these Pods is decided by users
+- The platform has no traffic data and cannot perceive actual traffic distribution
+
+#### 2. Calculation Based on Desired Replicas
+
+Batched calculation uses `Placement.Topology[].Replicas` (desired value assigned by scheduler), not actual running replicas.
+
+**Advantages**:
+- Declarative design, stable rollout plan
+- Not affected by runtime state fluctuations
+- Follows Kubernetes design principles
+
+**Scenario Description**:
+- If cluster A expects 40 replicas, actually running 30, when rolling out 20%, calculation is still based on 40 replicas (8 canary pods)
+- This ensures rollout plan consistency, avoiding strategy changes due to temporary failures
+
+#### 3. kruise-rollout Deployment Location
+
+kruise-rollout should be deployed on **clusters that need to run workloads with rollout strategies**:
+
+| Cluster Type | Needs kruise-rollout | Description |
+|--------------|---------------------|-------------|
+| Hub (management plane only) | No | Only runs Rocket controller, no workloads |
+| Hub (management + workloads) | **Yes** | Runs both Rocket controller and workloads |
+| Edge (workload cluster) | **Yes** | Runs workloads |
+
+**Configuration Examples**:
+
+```yaml
+# Scenario 1: Hub cluster only serves as management plane, no workloads
+# No need to configure kruise-rollout addon
+apiVersion: storage.rocket.io/v1alpha1
+kind: ManagedCluster
+metadata:
+  name: hub-management-only
+spec:
+  connectionMode: Hub
+  # No need to configure kruise-rollout
+
+---
+# Scenario 2: Hub cluster runs both management plane and workloads
+# Need to enable kruise-rollout for workload rollout strategies
+apiVersion: storage.rocket.io/v1alpha1
+kind: ManagedCluster
+metadata:
+  name: hub-with-workloads
+spec:
+  connectionMode: Hub
+  addons:
+    - name: kruise-rollout
+      enabled: true
+      config:
+        chartVersion: "0.5.0"
+
+---
+# Scenario 3: Edge cluster runs workloads
+# Need to enable kruise-rollout
+apiVersion: storage.rocket.io/v1alpha1
+kind: ManagedCluster
+metadata:
+  name: edge-cluster-1
+spec:
+  connectionMode: Edge
+  addons:
+    - name: kruise-rollout
+      enabled: true
+```
+
+> 💡 **Best Practice**: It's recommended to dedicate Hub cluster for management plane only, and deploy workloads to Edge clusters. If Hub cluster must run workloads, ensure to enable kruise-rollout addon for it.
+
+#### 4. Sequential Rollout Limitations
+
+When using `Sequential` mode or `ClusterOrder`:
+- Next cluster only starts after previous cluster completes rollout
+- Need to check previous cluster's Rollout status in Application Status
+- If previous cluster rollout fails, subsequent clusters won't start
+
+#### 5. Workload Compatibility
+
+Supported workload types:
+- Deployment
+- StatefulSet
+- CloneSet (OpenKruise)
+- Advanced StatefulSet (OpenKruise)
+
+### Configuration Options
+
+| Config Key | Description | Default |
+|------------|-------------|---------|
+| `chartVersion` | kruise-rollout chart version | `0.5.0` |
+| `chartRepoURL` | Helm Chart repository URL | Official repository |
+| `chartName` | Chart name | `kruise-rollout` |
+| `valuesConfigMap` | ConfigMap with custom Helm values | - |
+| `valuesNamespace` | Namespace of the ConfigMap | `kruise-rollout` |
+
+### Custom Helm Values
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kruise-rollout-values
+  namespace: kruise-rollout
+data:
+  values.yaml: |
+    manager:
+      replicas: 2
+      resources:
+        limits:
+          cpu: 500m
+          memory: 512Mi
+---
+apiVersion: storage.rocket.io/v1alpha1
+kind: ManagedCluster
+metadata:
+  name: edge-cluster-1
+spec:
+  addons:
+    - name: kruise-rollout
+      enabled: true
+      config:
+        valuesConfigMap: "kruise-rollout-values"
+```
+
+### Verify Installation
+
+```bash
+# Check if kruise-rollout is installed successfully
+kubectl get all -n kruise-rollout
+
+# View Rollout CR
+kubectl get rollout -A
+
+# View rollout status
+kubectl describe rollout my-app -n default
+```
+
+### Troubleshooting
+
+#### Q1: Rollout CR not created?
+
+**A**: Check the following:
+1. Whether Application has `rolloutStrategy` configured
+2. Whether cluster has kruise-rollout addon enabled
+3. Check Manager logs: `kubectl logs -n rocket-system deployment/rocket-manager`
+
+#### Q2: Rollout stuck?
+
+**A**: Possible causes:
+1. Pod image pull failure
+2. Insufficient resources, Pod cannot be scheduled
+3. Health check misconfigured
+4. View Rollout status: `kubectl get rollout my-app -o yaml`
+
+#### Q3: How to manually advance rollout?
+
+**A**: Modify Application's `rolloutStrategy.canary.steps` or use kubectl plugin:
+
+```bash
+# View current status
+kubectl kruise rollout status rollout/my-app
+
+# Manually advance to next step
+kubectl kruise rollout approve rollout/my-app
+```
+
+### Related Documentation
+
+- [Application API Reference](api.md) - Complete RolloutStrategy definition
+- [Architecture Design](architecture.md) - Rocket overall architecture
+- [OpenKruise Rollout Documentation](https://openkruise.io/docs/rollout/overview)
+
+---
+
 ## VictoriaMetrics Usage Guide
 
 ### Overview
@@ -679,6 +1090,10 @@ VictoriaMetrics Addon deploys monitoring system for multi-cluster environments w
 
 - **Hub side**: Deploys VictoriaMetrics single-node as centralized monitoring storage
 - **Edge side**: Deploys vmagent to collect local metrics and push to Hub
+
+### Architecture Design
+
+![VictoriaMetrics Architecture](images/victoriametrics_architecture.drawio.png)
 
 ### Important Notes
 

@@ -69,6 +69,9 @@ type ClusterStatus struct {
 	// Message provides details about the current state
 	// +optional
 	Message string `json:"message,omitempty"`
+	// Rollout contains the rollout status for this cluster
+	// +optional
+	Rollout *RolloutStatus `json:"rollout,omitempty"`
 }
 
 // JobAttributes defines configuration specific to Job and CronJob workloads
@@ -153,6 +156,11 @@ type ApplicationSpec struct {
 	// Resiliency defines the disruption budget and topology policy
 	// +optional
 	Resiliency *ResiliencyPolicy `json:"resiliency,omitempty"`
+
+	// RolloutStrategy defines the rollout strategy for the application
+	// When specified, kruise-rollout will be used to manage the deployment
+	// +optional
+	RolloutStrategy *RolloutStrategy `json:"rolloutStrategy,omitempty"`
 }
 
 // ResiliencyPolicy defines the disruption budget

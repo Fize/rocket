@@ -207,6 +207,7 @@ func TestAddonReconciler_Reconcile_WithMockRegistry(t *testing.T) {
 	c := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(cluster).
+		WithStatusSubresource(&storagev1alpha1.ManagedCluster{}).
 		Build()
 
 	r := &AddonReconciler{
@@ -232,6 +233,14 @@ func TestAddonReconciler_Reconcile_WithMockRegistry(t *testing.T) {
 	require.Len(t, mockCtrl.reconcileCalls, 1)
 	assert.Equal(t, "test-cluster", mockCtrl.reconcileCalls[0].ClusterName)
 	assert.Equal(t, "value", mockCtrl.reconcileCalls[0].Config["key"])
+
+	// Verify addon status was updated
+	var updatedCluster storagev1alpha1.ManagedCluster
+	err = c.Get(context.Background(), types.NamespacedName{Name: cluster.Name}, &updatedCluster)
+	require.NoError(t, err)
+	require.Len(t, updatedCluster.Status.AddonStatus, 1)
+	assert.Equal(t, "test-addon", updatedCluster.Status.AddonStatus[0].Name)
+	assert.Equal(t, "Applied", updatedCluster.Status.AddonStatus[0].State)
 }
 
 func TestAddonReconciler_Reconcile_AddonDisabled(t *testing.T) {
@@ -262,6 +271,7 @@ func TestAddonReconciler_Reconcile_AddonDisabled(t *testing.T) {
 	c := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(cluster).
+		WithStatusSubresource(&storagev1alpha1.ManagedCluster{}).
 		Build()
 
 	r := &AddonReconciler{
@@ -285,6 +295,14 @@ func TestAddonReconciler_Reconcile_AddonDisabled(t *testing.T) {
 
 	// Verify addon controller was NOT called
 	assert.Len(t, mockCtrl.reconcileCalls, 0)
+
+	// Verify addon status was updated to Disabled
+	var updatedCluster storagev1alpha1.ManagedCluster
+	err = c.Get(context.Background(), types.NamespacedName{Name: cluster.Name}, &updatedCluster)
+	require.NoError(t, err)
+	require.Len(t, updatedCluster.Status.AddonStatus, 1)
+	assert.Equal(t, "test-addon", updatedCluster.Status.AddonStatus[0].Name)
+	assert.Equal(t, "Disabled", updatedCluster.Status.AddonStatus[0].State)
 }
 
 func TestAddonReconciler_Reconcile_ControllerError(t *testing.T) {
@@ -319,6 +337,7 @@ func TestAddonReconciler_Reconcile_ControllerError(t *testing.T) {
 	c := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(cluster).
+		WithStatusSubresource(&storagev1alpha1.ManagedCluster{}).
 		Build()
 
 	r := &AddonReconciler{
@@ -340,6 +359,14 @@ func TestAddonReconciler_Reconcile_ControllerError(t *testing.T) {
 	result, err := r.Reconcile(context.Background(), req)
 	assert.NoError(t, err)
 	assert.Equal(t, ctrl.Result{}, result)
+
+	// Verify addon status was updated to Failed
+	var updatedCluster storagev1alpha1.ManagedCluster
+	err = c.Get(context.Background(), types.NamespacedName{Name: cluster.Name}, &updatedCluster)
+	require.NoError(t, err)
+	require.Len(t, updatedCluster.Status.AddonStatus, 1)
+	assert.Equal(t, "test-addon", updatedCluster.Status.AddonStatus[0].Name)
+	assert.Equal(t, "Failed", updatedCluster.Status.AddonStatus[0].State)
 }
 
 func TestAddonReconciler_Reconcile_NilController(t *testing.T) {
@@ -369,6 +396,7 @@ func TestAddonReconciler_Reconcile_NilController(t *testing.T) {
 	c := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(cluster).
+		WithStatusSubresource(&storagev1alpha1.ManagedCluster{}).
 		Build()
 
 	r := &AddonReconciler{
@@ -387,6 +415,14 @@ func TestAddonReconciler_Reconcile_NilController(t *testing.T) {
 	result, err := r.Reconcile(context.Background(), req)
 	assert.NoError(t, err)
 	assert.Equal(t, ctrl.Result{}, result)
+
+	// Verify addon status was updated to Pending (no controller registered)
+	var updatedCluster storagev1alpha1.ManagedCluster
+	err = c.Get(context.Background(), types.NamespacedName{Name: cluster.Name}, &updatedCluster)
+	require.NoError(t, err)
+	require.Len(t, updatedCluster.Status.AddonStatus, 1)
+	assert.Equal(t, "test-addon", updatedCluster.Status.AddonStatus[0].Name)
+	assert.Equal(t, "Pending", updatedCluster.Status.AddonStatus[0].State)
 }
 
 func TestAddonReconciler_GetRegistry(t *testing.T) {

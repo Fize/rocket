@@ -27,6 +27,7 @@ Dockerfile.cross
 .vscode
 .Ds_Store
 cover.out
+.codebuddy
 
 # 低性能专用
 Dockerfile-mac

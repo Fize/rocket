@@ -13,6 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	_ "github.com/hex-techs/rocket/internal/addon/kruiserollout"
 	_ "github.com/hex-techs/rocket/internal/addon/mcs"
 	addoncontroller "github.com/hex-techs/rocket/internal/manager/addon"
 	"github.com/hex-techs/rocket/internal/manager/apiserver"

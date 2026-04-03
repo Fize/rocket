@@ -1,0 +1,107 @@
+<mxfile host="Electron" agent="Mozilla/5.0" version="24.4.4" type="device">
+  <diagram id="vm_arch" name="VictoriaMetrics Architecture">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="700" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Edge Cluster 1 Box -->
+        <mxCell id="edge1_box" value="Edge Cluster 1 (Spoke)" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontSize=16;fontStyle=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;spacingTop=10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="60" width="300" height="260" as="geometry" />
+        </mxCell>
+        
+        <!-- Edge Cluster 2 Box -->
+        <mxCell id="edge2_box" value="Edge Cluster 2 (Spoke)" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontSize=16;fontStyle=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;spacingTop=10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="360" width="300" height="260" as="geometry" />
+        </mxCell>
+
+        <!-- Hub Cluster Box -->
+        <mxCell id="hub_box" value="Hub Cluster (Global View)" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontSize=18;fontStyle=1;fillColor=#f5f5f5;strokeColor=#666666;align=left;spacingLeft=10;spacingTop=10;" vertex="1" parent="1">
+          <mxGeometry x="540" y="60" width="360" height="560" as="geometry" />
+        </mxCell>
+
+        <!-- Hub Components -->
+        <mxCell id="vmauth" value="vmauth / vmui&lt;br&gt;(Authentication &amp;amp; UI)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="580" y="120" width="280" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="vmselect" value="vmselect&lt;br&gt;(Query Nodes)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="580" y="240" width="280" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="vmstorage" value="vmstorage&lt;br&gt;(Long-term Storage)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="630" y="360" width="180" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="vminsert" value="vminsert&lt;br&gt;(Write Nodes)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="580" y="520" width="280" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Edge 1 Components -->
+        <mxCell id="edge1_vmagent" value="vmagent&lt;br&gt;(Metrics Collector)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="100" y="120" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="edge1_targets" value="App Pods / Kubelet / Nodes" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="100" y="240" width="220" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Edge 2 Components -->
+        <mxCell id="edge2_vmagent" value="vmagent&lt;br&gt;(Metrics Collector)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="100" y="420" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="edge2_targets" value="App Pods / Kubelet / Nodes" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="100" y="540" width="220" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Grafana User -->
+        <mxCell id="grafana" value="Grafana" style="ellipse;shape=cloud;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="110" width="120" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Arrows -->
+        <mxCell id="arrow_grafana" value="Query Metrics" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.16;exitY=0.55;exitDx=0;exitDy=0;exitPerimeter=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;fontSize=13;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="grafana" target="vmauth">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="arrow_vmauth" value="Route Query" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=13;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="vmauth" target="vmselect">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="arrow_vmselect" value="Fetch Data" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;fontSize=13;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="vmselect" target="vmstorage">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="arrow_vminsert" value="Write Data" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;entryPerimeter=0;fontSize=13;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="vminsert" target="vmstorage">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="arrow_agent1_insert" value="remoteWrite (Push)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.25;entryDx=0;entryDy=0;fontSize=13;fontColor=#006600;strokeColor=#006600;strokeWidth=2;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="edge1_vmagent" target="vminsert">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="440" y="150" />
+              <mxPoint x="440" y="535" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="arrow_agent2_insert" value="remoteWrite (Push)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;fontSize=13;fontColor=#006600;strokeColor=#006600;strokeWidth=2;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="edge2_vmagent" target="vminsert">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="480" y="450" />
+              <mxPoint x="480" y="565" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="arrow_targets1" value="Scrape" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;fontSize=13;dashed=1;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="edge1_targets" target="edge1_vmagent">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="arrow_targets2" value="Scrape" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;fontSize=13;dashed=1;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="edge2_targets" target="edge2_vmagent">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

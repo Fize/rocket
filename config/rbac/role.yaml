@@ -89,3 +89,23 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - rollouts.kruise.io
+  resources:
+  - rollouts
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - rollouts.kruise.io
+  resources:
+  - rollouts/status
+  verbs:
+  - get
+  - patch
+  - update

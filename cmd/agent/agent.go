@@ -21,7 +21,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/hex-techs/rocket/internal/agent/addon"
 	"github.com/hex-techs/rocket/internal/agent/cluster"
+	_ "github.com/hex-techs/rocket/internal/addon/kruiserollout"
+	_ "github.com/hex-techs/rocket/internal/addon/mcs"
+	_ "github.com/hex-techs/rocket/internal/addon/victoriametrics"
 	"github.com/hex-techs/rocket/pkg/scheme"
 	"github.com/spf13/pflag"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -124,6 +128,17 @@ func main() {
 				setupLog.Error(err, "Tunnel failed")
 			}
 		}()
+
+		// Setup addon reconciler to watch ManagedCluster from Hub
+		if err := (&addon.AddonReconciler{
+			HubClient:   clusterAgent.HubClient,
+			Scheme:      scheme.Scheme,
+			ClusterName: clusterName,
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create addon reconciler")
+			os.Exit(1)
+		}
+		setupLog.Info("Addon reconciler initialized")
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

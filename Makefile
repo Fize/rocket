@@ -64,6 +64,24 @@ e2e-kind: ## Run full e2e suite (create, test, delete)
 	bash hack/e2e-kind.sh test
 	bash hack/e2e-kind.sh delete
 
+.PHONY: e2e-kruise-create
+e2e-kruise-create: ## Create multi-cluster kind environment for kruise-rollout e2e tests
+	bash hack/kruise-rollout-e2e.sh create
+
+.PHONY: e2e-kruise-test
+e2e-kruise-test: ## Run kruise-rollout e2e tests
+	bash hack/kruise-rollout-e2e.sh test
+
+.PHONY: e2e-kruise-delete
+e2e-kruise-delete: ## Delete kruise-rollout e2e clusters
+	bash hack/kruise-rollout-e2e.sh delete
+
+.PHONY: e2e-kruise
+e2e-kruise: ## Run full kruise-rollout e2e suite (create, test, delete)
+	bash hack/kruise-rollout-e2e.sh create
+	bash hack/kruise-rollout-e2e.sh test
+	bash hack/kruise-rollout-e2e.sh delete
+
 ##@ Build
 
 .PHONY: build-all

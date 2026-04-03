@@ -1,0 +1,108 @@
+<mxfile host="Electron" agent="Mozilla/5.0" version="24.4.4" type="device">
+  <diagram id="kruise_rollout" name="Kruise Rollout Architecture">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1000" pageHeight="700" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        
+        <!-- Hub Cluster Box -->
+        <mxCell id="hub_box" value="Hub Cluster" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontSize=18;fontStyle=1;fillColor=#f5f5f5;strokeColor=#666666;align=left;spacingLeft=10;spacingTop=10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="60" width="400" height="520" as="geometry" />
+        </mxCell>
+        
+        <!-- Edge Cluster 1 Box -->
+        <mxCell id="edge1_box" value="Edge Cluster 1 (region-a)" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontSize=16;fontStyle=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;spacingTop=10;" vertex="1" parent="1">
+          <mxGeometry x="600" y="60" width="300" height="240" as="geometry" />
+        </mxCell>
+        
+        <!-- Edge Cluster 2 Box -->
+        <mxCell id="edge2_box" value="Edge Cluster 2 (region-b)" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontSize=16;fontStyle=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;spacingTop=10;" vertex="1" parent="1">
+          <mxGeometry x="600" y="340" width="300" height="240" as="geometry" />
+        </mxCell>
+
+        <!-- Hub Components -->
+        <mxCell id="rocket_manager" value="Rocket Manager&lt;br&gt;&lt;i&gt;(App Controller &amp;amp; Replica Calculator)&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="120" y="120" width="280" height="80" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="kruise_rollout" value="Kruise Rollout Controller" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="120" y="280" width="280" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="k8s_api" value="Kubernetes API Server&lt;br&gt;(Applications, Rollouts, Clusters CRDs)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="120" y="440" width="280" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Edge 1 Components -->
+        <mxCell id="edge1_agent" value="Rocket Agent" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="640" y="120" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="edge1_workload" value="Deployment / CloneSet" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="640" y="220" width="220" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Edge 2 Components -->
+        <mxCell id="edge2_agent" value="Rocket Agent" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="640" y="400" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="edge2_workload" value="Deployment / CloneSet" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="640" y="500" width="220" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- User -->
+        <mxCell id="user" value="Developer / CI" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="245" y="10" width="30" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Arrows -->
+        <mxCell id="arrow_user_mgr" value="Deploy App CR" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=13;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="user" target="rocket_manager">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="arrow_mgr_api" value="Create Rollout CRs" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=13;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="rocket_manager" target="k8s_api">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="90" y="160" />
+              <mxPoint x="90" y="490" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow_kruise_api" value="Watch &amp; Update Status" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.75;exitY=1;exitDx=0;exitDy=0;entryX=0.75;entryY=0;entryDx=0;entryDy=0;fontSize=13;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="kruise_rollout" target="k8s_api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="arrow_mgr_kruise" value="Trigger Rollout" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=0.25;entryY=0;entryDx=0;entryDy=0;fontSize=13;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="rocket_manager" target="kruise_rollout">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="arrow_mgr_edge1" value="Sync App Config" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=13;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="rocket_manager" target="edge1_agent">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="520" y="140" />
+              <mxPoint x="520" y="150" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="arrow_mgr_edge2" value="Sync App Config" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=13;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="rocket_manager" target="edge2_agent">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="520" y="180" />
+              <mxPoint x="520" y="430" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="arrow_agent1_workload" value="Manage Workload" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=13;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="edge1_agent" target="edge1_workload">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="arrow_agent2_workload" value="Manage Workload" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=13;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="edge2_agent" target="edge2_workload">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/hex-techs/rocket/internal/addon"
+	_ "github.com/hex-techs/rocket/internal/addon/kruiserollout"
 	_ "github.com/hex-techs/rocket/internal/addon/mcs"
 	_ "github.com/hex-techs/rocket/internal/addon/victoriametrics"
 	"github.com/hex-techs/rocket/internal/agent/cluster"

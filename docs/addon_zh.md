@@ -444,6 +444,7 @@ spec:
 | Addon 名称 | 功能 | Manager 端 | Agent 端 |
 |-----------|------|-----------|---------|
 | **mcs-lighthouse** | 跨集群服务发现 | Broker | Submariner Operator |
+| **kruise-rollout** | 跨集群渐进式发布 | 状态协调 | kruise-rollout 安装 |
 | **victoriametrics** | 多集群监控 | VictoriaMetrics Single | vmagent |
 
 ## Submariner 使用指南
@@ -675,6 +676,416 @@ kubectl run test --image=busybox --rm -it -- \
 
 > 💡 **提示**: 如果网络连通性问题涉及底层网络配置（如路由、防火墙、VPC Peering 等），需要用户自行排查和配置。Rocket 仅负责服务发现层面的功能，不负责底层网络的运维。
 
+## Kruise-Rollout 使用指南
+
+### 概述
+
+Kruise-Rollout Addon 为 Rocket 提供跨集群渐进式发布能力，支持 Canary（金丝雀）、Blue-Green（蓝绿）、A/B Test 三种发布策略。该 Addon 基于 [OpenKruise Rollout](https://openkruise.io/docs/rollout/overview) 实现，Rocket 负责协调多集群发布流程。
+
+### 架构设计
+
+![Kruise-Rollout Architecture](images/kruise_rollout_architecture.drawio.png)
+
+### 启用 Addon
+
+在成员集群上启用 kruise-rollout：
+
+```yaml
+apiVersion: storage.rocket.io/v1alpha1
+kind: ManagedCluster
+metadata:
+  name: cluster-1
+spec:
+  connectionMode: Edge
+  addons:
+    - name: kruise-rollout
+      enabled: true
+      config:
+        chartVersion: "0.5.0"  # 可选，指定 chart 版本
+```
+
+### 发布策略
+
+#### 1. Canary（金丝雀发布）
+
+Canary 发布支持多批次渐进式更新，每批更新一定比例的 Pod。
+
+**基本配置**：
+
+```yaml
+apiVersion: apps.rocket.io/v1alpha1
+kind: Application
+metadata:
+  name: my-app
+spec:
+  workload:
+    apiVersion: apps/v1
+    kind: Deployment
+  replicas: 100
+  rolloutStrategy:
+    type: Canary
+    canary:
+      steps:
+        - weight: 20      # 第一批：20%
+          pause:
+            duration: 60  # 暂停 60 秒
+        - weight: 50      # 第二批：50%
+          pause:
+            duration: 60
+        - weight: 100     # 第三批：100%
+```
+
+**跨集群分批发布**：
+
+通过 `globalReplicaDistribution` 配置，Rocket 会自动计算每个集群应发布的 Pod 数量：
+
+```yaml
+apiVersion: apps.rocket.io/v1alpha1
+kind: Application
+metadata:
+  name: my-app
+spec:
+  replicas: 100
+  rolloutStrategy:
+    type: Canary
+    canary:
+      steps:
+        - weight: 20
+      globalReplicaDistribution:
+        mode: Equal  # 或 Weighted, Sequential
+```
+
+##### 分布模式
+
+| 模式 | 描述 | 适用场景 |
+|------|------|---------|
+| **Equal** | 平均分配到所有集群 | 各集群规模相近 |
+| **Weighted** | 按权重分配到各集群 | 集群规模差异大 |
+| **Sequential** | 逐个集群发布 | 需要严格控制发布顺序 |
+
+##### 示例：按权重分配
+
+```yaml
+globalReplicaDistribution:
+  mode: Weighted
+  clusterWeights:
+    - clusterName: cluster-a
+      weight: 30  # 30% 的 canary pod
+    - clusterName: cluster-b
+      weight: 70  # 70% 的 canary pod
+```
+
+##### 示例：按序发布
+
+```yaml
+globalReplicaDistribution:
+  mode: Sequential
+---
+# 配合 ClusterOrder 使用
+clusterOrder:
+  type: Sequential
+  clusters:
+    - cluster-canary   # 先发布 canary 集群
+    - cluster-prod-1   # 再发布生产集群 1
+    - cluster-prod-2   # 最后发布生产集群 2
+```
+
+#### 2. Blue-Green（蓝绿发布）
+
+蓝绿发布创建完整的新版本环境，验证通过后切换流量。
+
+```yaml
+apiVersion: apps.rocket.io/v1alpha1
+kind: Application
+metadata:
+  name: my-app
+spec:
+  rolloutStrategy:
+    type: BlueGreen
+    blueGreen:
+      activeService: my-app-active    # 当前版本服务
+      previewService: my-app-preview  # 新版本预览服务
+      autoPromotionEnabled: false     # 手动确认后才切换
+      scaleDownDelaySeconds: 600      # 切换后 10 分钟再下线旧版本
+```
+
+#### 3. A/B Test（A/B 测试）
+
+A/B Test 将不同集群作为基线和候选版本，用于对比测试。
+
+```yaml
+apiVersion: apps.rocket.io/v1alpha1
+kind: Application
+metadata:
+  name: my-app
+spec:
+  rolloutStrategy:
+    type: ABTest
+    abTest:
+      baselineCluster: cluster-stable      # 基线版本集群
+      candidateClusters:                   # 候选版本集群
+        - cluster-canary-1
+        - cluster-canary-2
+      trafficSplit: 30  # 30% 流量到候选版本
+```
+
+### Pod 数量计算逻辑
+
+#### 数据来源
+
+分批发布基于**期望副本数**（调度器分配结果），而非实际运行副本数：
+
+```
+数据流：
+Application.Spec.Replicas (全局期望)
+         ↓
+Placement.Topology[].Replicas (每个集群期望) ← 分批计算使用此值
+         ↓
+ClustersStatus[].ReadyReplicas (实际运行)
+```
+
+#### 计算示例
+
+假设配置：
+- 全局 100 副本，发布 20%
+- 集群 A 期望 40 副本
+- 集群 B 期望 60 副本
+
+**Equal 模式**：
+```
+全局 canary = 100 × 20% = 20 个
+集群 A canary = 20 / 2 = 10 个
+集群 B canary = 20 / 2 = 10 个
+```
+
+**Weighted 模式（A:30, B:70）**：
+```
+集群 A canary = 20 × 30% = 6 个
+集群 B canary = 20 × 70% = 14 个
+```
+
+**Proportional 模式（默认，无 GlobalReplicaDistribution）**：
+```
+集群 A canary = 20 × 40/100 = 8 个（按期望副本数比例）
+集群 B canary = 20 × 60/100 = 12 个
+```
+
+### 流量路由
+
+Rocket 仅负责 Pod 数量的分批，**流量路由由用户自行控制**。可通过以下方式实现：
+
+#### Istio 流量路由
+
+```yaml
+rolloutStrategy:
+  type: Canary
+  canary:
+    steps:
+      - weight: 20
+    trafficRouting:
+      istio:
+        virtualService: my-app-vs
+        destinationRule: my-app-dr
+```
+
+用户需要在 Lua 或外部系统中配置 VirtualService 的流量百分比。
+
+#### NGINX Ingress 流量路由
+
+```yaml
+rolloutStrategy:
+  type: Canary
+  canary:
+    steps:
+      - weight: 20
+    trafficRouting:
+      nginx:
+        ingress: my-app-ingress
+        annotationPrefix: nginx.ingress.kubernetes.io
+```
+
+### 重要注意事项
+
+#### 1. 发布的是 Pod 数量，不是流量比例
+
+> ⚠️ **重要**：Rocket 的分批发布控制的是 **Pod 数量**，而非流量百分比。流量路由由用户通过 Lua 脚本或外部系统（如 Istio、Nginx Ingress）自行控制。
+
+这意味着：
+- `weight: 20` 表示创建 20% 的新版本 Pod
+- 流量如何分配到这些 Pod，由用户决定
+- 平台没有流量数据，无法感知实际流量分布
+
+#### 2. 基于期望副本数计算
+
+分批计算使用 `Placement.Topology[].Replicas`（调度器分配的期望值），而非实际运行副本数。
+
+**优点**：
+- 声明式设计，发布计划稳定
+- 不受运行状态波动影响
+- 符合 Kubernetes 设计理念
+
+**场景说明**：
+- 若集群 A 期望 40 副本，实际运行 30 个，发布 20% 时仍按 40 副本计算（8 个 canary）
+- 这确保发布计划的一致性，避免因临时故障导致发布策略变化
+
+#### 3. kruise-rollout 部署位置
+
+kruise-rollout 应部署在**需要运行业务应用并使用发布策略的集群**上：
+
+| 集群类型 | 是否需要 kruise-rollout | 说明 |
+|---------|------------------------|------|
+| Hub（仅管理平面） | 否 | 仅运行 Rocket 控制器，不部署业务应用 |
+| Hub（管理+业务） | **是** | 既运行 Rocket 控制器，又部署业务应用 |
+| Edge（业务集群） | **是** | 运行业务应用 |
+
+**配置示例**：
+
+```yaml
+# 场景 1: Hub 集群仅作为管理平面，不部署业务应用
+# 无需配置 kruise-rollout addon
+apiVersion: storage.rocket.io/v1alpha1
+kind: ManagedCluster
+metadata:
+  name: hub-management-only
+spec:
+  connectionMode: Hub
+  # 无需配置 kruise-rollout
+
+---
+# 场景 2: Hub 集群同时运行管理平面和业务应用
+# 需要启用 kruise-rollout 以支持业务应用的发布策略
+apiVersion: storage.rocket.io/v1alpha1
+kind: ManagedCluster
+metadata:
+  name: hub-with-workloads
+spec:
+  connectionMode: Hub
+  addons:
+    - name: kruise-rollout
+      enabled: true
+      config:
+        chartVersion: "0.5.0"
+
+---
+# 场景 3: Edge 集群运行业务应用
+# 需要启用 kruise-rollout
+apiVersion: storage.rocket.io/v1alpha1
+kind: ManagedCluster
+metadata:
+  name: edge-cluster-1
+spec:
+  connectionMode: Edge
+  addons:
+    - name: kruise-rollout
+      enabled: true
+```
+
+> 💡 **最佳实践**：建议将 Hub 集群专用于管理平面，业务应用部署到 Edge 集群。如果 Hub 集群必须同时运行业务应用，请确保为其启用 kruise-rollout addon。
+
+#### 4. 顺序发布的限制
+
+使用 `Sequential` 模式或 `ClusterOrder` 时：
+- 前一个集群发布完成后，才会开始下一个集群
+- 需要在 Application Status 中检查前序集群的 Rollout 状态
+- 若前序集群发布失败，后续集群不会开始发布
+
+#### 5. 与 Workload 的兼容性
+
+支持的工作负载类型：
+- Deployment
+- StatefulSet
+- CloneSet（OpenKruise）
+- Advanced StatefulSet（OpenKruise）
+
+### 配置选项
+
+| 配置键 | 描述 | 默认值 |
+|-------|------|--------|
+| `chartVersion` | kruise-rollout chart 版本 | `0.5.0` |
+| `chartRepoURL` | Helm Chart 仓库地址 | 官方仓库 |
+| `chartName` | Chart 名称 | `kruise-rollout` |
+| `valuesConfigMap` | 自定义 Helm values 的 ConfigMap | - |
+| `valuesNamespace` | ConfigMap 所在命名空间 | `kruise-rollout` |
+
+### 自定义 Helm Values
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kruise-rollout-values
+  namespace: kruise-rollout
+data:
+  values.yaml: |
+    manager:
+      replicas: 2
+      resources:
+        limits:
+          cpu: 500m
+          memory: 512Mi
+---
+apiVersion: storage.rocket.io/v1alpha1
+kind: ManagedCluster
+metadata:
+  name: edge-cluster-1
+spec:
+  addons:
+    - name: kruise-rollout
+      enabled: true
+      config:
+        valuesConfigMap: "kruise-rollout-values"
+```
+
+### 验证安装
+
+```bash
+# 检查 kruise-rollout 是否安装成功
+kubectl get all -n kruise-rollout
+
+# 查看 Rollout CR
+kubectl get rollout -A
+
+# 查看发布状态
+kubectl describe rollout my-app -n default
+```
+
+### 故障排查
+
+#### Q1: Rollout CR 未创建？
+
+**A**: 检查以下几点：
+1. Application 是否配置了 `rolloutStrategy`
+2. 集群是否启用了 kruise-rollout addon
+3. 查看 Manager 日志：`kubectl logs -n rocket-system deployment/rocket-manager`
+
+#### Q2: 发布卡住不动？
+
+**A**: 可能原因：
+1. Pod 镜像拉取失败
+2. 资源不足，Pod 无法调度
+3. 健康检查配置有误
+4. 查看Rollout 状态：`kubectl get rollout my-app -o yaml`
+
+#### Q3: 如何手动推进发布？
+
+**A**: 通过修改 Application 的 `rolloutStrategy.canary.steps` 或使用 kubectl 插件：
+
+```bash
+# 查看当前状态
+kubectl kruise rollout status rollout/my-app
+
+# 手动推进到下一步
+kubectl kruise rollout approve rollout/my-app
+```
+
+### 相关文档
+
+- [Application API 参考](api_zh.md) - RolloutStrategy 完整定义
+- [架构设计](architecture_zh.md) - Rocket 整体架构
+- [OpenKruise Rollout 文档](https://openkruise.io/docs/rollout/overview)
+
+---
+
 ## VictoriaMetrics 使用指南
 
 ### 概述
@@ -683,6 +1094,10 @@ VictoriaMetrics Addon 在多集群环境中部署监控系统，采用 Hub-Spoke
 
 - **Hub 端**：部署 VictoriaMetrics 单节点作为中心化监控存储
 - **Edge 端**：部署 vmagent 采集本地指标并推送到 Hub
+
+### 架构设计
+
+![VictoriaMetrics Architecture](images/victoriametrics_architecture.drawio.png)
 
 ### 重要说明
 

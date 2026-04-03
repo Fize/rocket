@@ -47,9 +47,11 @@ import (
 // ApplicationReconciler reconciles a Application object
 type ApplicationReconciler struct {
 	client.Client
-	Scheme        *runtime.Scheme
-	ClientManager *cluster.ClientManager
-	Recorder      record.EventRecorder
+	Scheme              *runtime.Scheme
+	ClientManager       *cluster.ClientManager
+	Recorder            record.EventRecorder
+	RolloutCoordinator  *RolloutCoordinator
+	RolloutStatusAggr   *RolloutStatusAggregator
 }
 
 // +kubebuilder:rbac:groups=apps.rocket.io,resources=applications,verbs=get;list;watch;create;update;patch;delete
@@ -183,6 +185,14 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			logger.Error(err, "Failed to reconcile PDB on cluster", "cluster", topology.Name)
 			return ctrl.Result{}, err
 		}
+
+		// Reconcile Rollout if strategy specified
+		if app.Spec.RolloutStrategy != nil {
+			if err := r.RolloutCoordinator.ReconcileRollout(ctx, &app, app.Status.Placement.Topology); err != nil {
+				logger.Error(err, "Failed to reconcile rollout", "cluster", topology.Name)
+				return ctrl.Result{}, err
+			}
+		}
 	}
 
 	// 3. Handle cleanup for clusters removed from Placement
@@ -306,6 +316,13 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 	app.Status.GlobalReplicas = totalDesired
 	app.Status.ClustersStatus = clusterStatuses
+
+	// Aggregate Rollout status
+	if app.Spec.RolloutStrategy != nil {
+		if err := r.RolloutStatusAggr.AggregateRolloutStatus(ctx, &app, newAppliedClusters); err != nil {
+			logger.Error(err, "Failed to aggregate rollout status")
+		}
+	}
 
 	if err := r.Status().Patch(ctx, &app, patch); err != nil {
 		return ctrl.Result{}, err
@@ -701,6 +718,11 @@ func (r *ApplicationReconciler) reconcileResiliency(ctx context.Context, cli cli
 // SetupWithManager sets up the controller with the Manager.
 func (r *ApplicationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.Recorder = mgr.GetEventRecorderFor("application-controller")
+	
+	// Initialize RolloutCoordinator and StatusAggregator
+	r.RolloutCoordinator = NewRolloutCoordinator(r.ClientManager)
+	r.RolloutStatusAggr = NewRolloutStatusAggregator(r.ClientManager)
+	
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&appsv1alpha1.Application{}).
 		Complete(r)
