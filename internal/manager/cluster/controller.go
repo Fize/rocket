@@ -6,17 +6,17 @@ import (
 	"fmt"
 	"time"
 
+	clusterv1alpha1 "github.com/fize/rocket/pkg/apis/storage/v1alpha1"
+	"github.com/fize/rocket/pkg/constants"
+	"github.com/fize/rocket/pkg/observability"
 	"github.com/google/uuid"
-	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/hex-techs/rocket/internal/manager/metrics"
-	"github.com/hex-techs/rocket/pkg/constants"
-	"github.com/hex-techs/rocket/pkg/observability"
+	"github.com/fize/rocket/internal/manager/metrics"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"

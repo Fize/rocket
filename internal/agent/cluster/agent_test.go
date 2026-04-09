@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fize/rocket/pkg/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -14,9 +15,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	appsv1alpha1 "github.com/hex-techs/rocket/pkg/apis/apps/v1alpha1"
-	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
-	"github.com/hex-techs/rocket/pkg/constants"
+	appsv1alpha1 "github.com/fize/rocket/pkg/apis/apps/v1alpha1"
+	clusterv1alpha1 "github.com/fize/rocket/pkg/apis/storage/v1alpha1"
 )
 
 func TestNewAgent(t *testing.T) {

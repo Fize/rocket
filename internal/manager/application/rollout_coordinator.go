@@ -9,7 +9,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	appsv1alpha1 "github.com/hex-techs/rocket/pkg/apis/apps/v1alpha1"
+	appsv1alpha1 "github.com/fize/rocket/pkg/apis/apps/v1alpha1"
 )
 
 // RolloutCoordinator coordinates rollout across multiple clusters

@@ -45,9 +45,9 @@ For understanding Rocket's implementation details:
 
 ## Project Links
 
-- [GitHub Repository](https://github.com/hex-techs/rocket)
-- [Issue Tracker](https://github.com/hex-techs/rocket/issues)
-- [Contributing Guide](https://github.com/hex-techs/rocket/blob/main/CONTRIBUTING.md)
+- [GitHub Repository](https://github.com/fize/rocket)
+- [Issue Tracker](https://github.com/fize/rocket/issues)
+- [Contributing Guide](https://github.com/fize/rocket/blob/main/CONTRIBUTING.md)
 
 ## Contributing to Documentation
 

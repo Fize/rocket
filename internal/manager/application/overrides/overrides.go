@@ -17,7 +17,7 @@ limitations under the License.
 package overrides
 
 import (
-	appsv1alpha1 "github.com/hex-techs/rocket/pkg/apis/apps/v1alpha1"
+	appsv1alpha1 "github.com/fize/rocket/pkg/apis/apps/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"

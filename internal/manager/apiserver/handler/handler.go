@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
-	"github.com/hex-techs/rocket/pkg/constants"
+	clusterv1alpha1 "github.com/fize/rocket/pkg/apis/storage/v1alpha1"
+	"github.com/fize/rocket/pkg/constants"
 	"github.com/rancher/remotedialer"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apiserver/pkg/server/mux"

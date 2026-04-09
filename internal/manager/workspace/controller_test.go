@@ -31,9 +31,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/hex-techs/rocket/internal/manager/cluster"
-	storagev1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
-	workspacev1alpha1 "github.com/hex-techs/rocket/pkg/apis/workspace/v1alpha1"
+	"github.com/fize/rocket/internal/manager/cluster"
+	storagev1alpha1 "github.com/fize/rocket/pkg/apis/storage/v1alpha1"
+	workspacev1alpha1 "github.com/fize/rocket/pkg/apis/workspace/v1alpha1"
 )
 
 func setupScheme() *runtime.Scheme {

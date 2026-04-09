@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	parentaddon "github.com/hex-techs/rocket/internal/addon"
-	storagev1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
+	parentaddon "github.com/fize/rocket/internal/addon"
+	storagev1alpha1 "github.com/fize/rocket/pkg/apis/storage/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

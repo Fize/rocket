@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/hex-techs/rocket/internal/addon"
-	"github.com/hex-techs/rocket/pkg/helm"
+	"github.com/fize/rocket/internal/addon"
+	"github.com/fize/rocket/pkg/helm"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"

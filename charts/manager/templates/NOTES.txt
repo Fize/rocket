@@ -34,4 +34,4 @@ Verify APIService is working:
   # Should show: SERVICE = {{ .Release.Namespace }}/{{ include "manager.fullname" . }}-webhook
 
 For more information on running Rocket, visit:
-https://github.com/Hex-Techs/rocket
+https://github.com/fize/rocket

@@ -6,9 +6,9 @@ import (
 	"net"
 	"sync"
 
-	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
-	"github.com/hex-techs/rocket/pkg/constants"
-	"github.com/hex-techs/rocket/pkg/scheme"
+	clusterv1alpha1 "github.com/fize/rocket/pkg/apis/storage/v1alpha1"
+	"github.com/fize/rocket/pkg/constants"
+	"github.com/fize/rocket/pkg/scheme"
 	"github.com/rancher/remotedialer"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/rest"

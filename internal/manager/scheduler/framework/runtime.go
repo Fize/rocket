@@ -3,8 +3,8 @@ package framework
 import (
 	"context"
 
-	appsv1alpha1 "github.com/hex-techs/rocket/pkg/apis/apps/v1alpha1"
-	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
+	appsv1alpha1 "github.com/fize/rocket/pkg/apis/apps/v1alpha1"
+	clusterv1alpha1 "github.com/fize/rocket/pkg/apis/storage/v1alpha1"
 )
 
 type frameworkImpl struct {

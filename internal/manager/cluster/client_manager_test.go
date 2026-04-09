@@ -6,7 +6,7 @@ import (
 	"net"
 	"testing"
 
-	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
+	clusterv1alpha1 "github.com/fize/rocket/pkg/apis/storage/v1alpha1"
 	"github.com/rancher/remotedialer"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

@@ -1,7 +1,7 @@
 package kruiserollout
 
 import (
-	"github.com/hex-techs/rocket/internal/addon"
+	"github.com/fize/rocket/internal/addon"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 )

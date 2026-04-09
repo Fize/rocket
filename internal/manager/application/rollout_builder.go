@@ -6,7 +6,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	appsv1alpha1 "github.com/hex-techs/rocket/pkg/apis/apps/v1alpha1"
+	appsv1alpha1 "github.com/fize/rocket/pkg/apis/apps/v1alpha1"
 )
 
 // RolloutBuilder builds Rollout resources for kruise-rollout

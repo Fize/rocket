@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
-	appsv1alpha1 "github.com/hex-techs/rocket/pkg/apis/apps/v1alpha1"
-	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
+	appsv1alpha1 "github.com/fize/rocket/pkg/apis/apps/v1alpha1"
+	clusterv1alpha1 "github.com/fize/rocket/pkg/apis/storage/v1alpha1"
 )
 
 // CycleState stores data that needs to be passed between plugins during a scheduling cycle.

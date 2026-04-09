@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/hex-techs/rocket/internal/manager/cluster"
-	"github.com/hex-techs/rocket/internal/manager/sharding"
-	appsv1alpha1 "github.com/hex-techs/rocket/pkg/apis/apps/v1alpha1"
+	"github.com/fize/rocket/internal/manager/cluster"
+	appsv1alpha1 "github.com/fize/rocket/pkg/apis/apps/v1alpha1"
+	"github.com/fize/rocket/internal/manager/sharding"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"

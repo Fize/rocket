@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 
-	appsv1alpha1 "github.com/hex-techs/rocket/pkg/apis/apps/v1alpha1"
+	appsv1alpha1 "github.com/fize/rocket/pkg/apis/apps/v1alpha1"
 )
 
 // GlobalReplicaCalculator calculates replica distribution across clusters

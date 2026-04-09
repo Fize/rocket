@@ -8,9 +8,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/hex-techs/rocket/internal/manager/scheduler/framework"
-	appsv1alpha1 "github.com/hex-techs/rocket/pkg/apis/apps/v1alpha1"
-	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
+	"github.com/fize/rocket/internal/manager/scheduler/framework"
+	appsv1alpha1 "github.com/fize/rocket/pkg/apis/apps/v1alpha1"
+	clusterv1alpha1 "github.com/fize/rocket/pkg/apis/storage/v1alpha1"
 )
 
 func TestResourceScore(t *testing.T) {

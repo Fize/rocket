@@ -10,8 +10,8 @@ import (
 
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	"github.com/hex-techs/rocket/internal/manager/apiserver/handler"
-	clusterregistry "github.com/hex-techs/rocket/internal/manager/apiserver/registry/cluster"
+	"github.com/fize/rocket/internal/manager/apiserver/handler"
+	clusterregistry "github.com/fize/rocket/internal/manager/apiserver/registry/cluster"
 	"github.com/rancher/remotedialer"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -23,7 +23,7 @@ import (
 	"k8s.io/apiserver/pkg/server/options"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/cluster/v1alpha1"
+	clusterv1alpha1 "github.com/fize/rocket/pkg/apis/cluster/v1alpha1"
 )
 
 type APIServer struct {

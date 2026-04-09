@@ -1226,7 +1226,7 @@ curl http://localhost:8428/api/v1/query?query=up
 package myaddon
 
 import (
-    "github.com/hex-techs/rocket/internal/addon"
+    "github.com/fize/rocket/internal/addon"
     ctrl "sigs.k8s.io/controller-runtime"
 )
 
@@ -1279,7 +1279,7 @@ func (c *MyManagerController) Reconcile(ctx context.Context, config addon.AddonC
 
 ```go
 import (
-    _ "github.com/hex-techs/rocket/internal/addon/mcs"
+    _ "github.com/fize/rocket/internal/addon/mcs"
     _ "github.com/your-org/rocket-addons/my-addon"  // 第三方 Addon
 )
 ```

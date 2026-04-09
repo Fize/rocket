@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fize/rocket/pkg/constants"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -14,8 +15,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
-	"github.com/hex-techs/rocket/pkg/constants"
+	clusterv1alpha1 "github.com/fize/rocket/pkg/apis/storage/v1alpha1"
 )
 
 func newClusterScheme(t *testing.T) *runtime.Scheme {

@@ -2,7 +2,7 @@
 
 [中文文档](README_zh.md)
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/hex-techs/rocket)](https://goreportcard.com/report/github.com/hex-techs/rocket)
+[![Go Report Card](https://goreportcard.com/badge/github.com/fize/rocket)](https://goreportcard.com/report/github.com/fize/rocket)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 **Rocket** is a cloud-native multi-cluster application management platform designed to simplify application distribution, scheduling, and management across multiple Kubernetes clusters.
@@ -56,7 +56,7 @@ Rocket adopts a Hub-Spoke architecture to manage multi-cluster environments effi
 
 ```bash
 # Clone the repository
-git clone https://github.com/hex-techs/rocket.git
+git clone https://github.com/fize/rocket.git
 cd rocket
 
 # Build binaries

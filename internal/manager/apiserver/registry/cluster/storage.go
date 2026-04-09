@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"strings"
 
-	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/cluster/v1alpha1"
-	storagev1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
+	clusterv1alpha1 "github.com/fize/rocket/pkg/apis/cluster/v1alpha1"
+	storagev1alpha1 "github.com/fize/rocket/pkg/apis/storage/v1alpha1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"

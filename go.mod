@@ -1,4 +1,4 @@
-module github.com/hex-techs/rocket
+module github.com/fize/rocket
 
 go 1.23.0
 

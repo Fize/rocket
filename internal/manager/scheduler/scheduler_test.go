@@ -15,11 +15,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	schedcache "github.com/hex-techs/rocket/internal/manager/scheduler/cache"
-	"github.com/hex-techs/rocket/internal/manager/scheduler/framework"
-	"github.com/hex-techs/rocket/internal/manager/scheduler/queue"
-	appsv1alpha1 "github.com/hex-techs/rocket/pkg/apis/apps/v1alpha1"
-	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
+	schedcache "github.com/fize/rocket/internal/manager/scheduler/cache"
+	appsv1alpha1 "github.com/fize/rocket/pkg/apis/apps/v1alpha1"
+	clusterv1alpha1 "github.com/fize/rocket/pkg/apis/storage/v1alpha1"
+	"github.com/fize/rocket/internal/manager/scheduler/framework"
+	"github.com/fize/rocket/internal/manager/scheduler/queue"
 )
 
 // Test helpers

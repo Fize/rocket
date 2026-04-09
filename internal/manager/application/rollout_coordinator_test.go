@@ -12,8 +12,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	appsv1alpha1 "github.com/hex-techs/rocket/pkg/apis/apps/v1alpha1"
-	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
+	appsv1alpha1 "github.com/fize/rocket/pkg/apis/apps/v1alpha1"
+	clusterv1alpha1 "github.com/fize/rocket/pkg/apis/storage/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -80,7 +80,7 @@ func TestRolloutCoordinator_ReconcileRollout_NoStrategy(t *testing.T) {
 
 func TestRolloutCoordinator_ReconcileRollout_Parallel(t *testing.T) {
 	scheme := setupTestScheme()
-	
+
 	clusterAClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 	clusterBClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
@@ -142,7 +142,7 @@ func TestRolloutCoordinator_ReconcileRollout_Parallel(t *testing.T) {
 
 func TestRolloutCoordinator_ReconcileRollout_Sequential(t *testing.T) {
 	scheme := setupTestScheme()
-	
+
 	clusterAClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 	clusterBClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
@@ -207,7 +207,7 @@ func TestRolloutCoordinator_ReconcileRollout_Sequential(t *testing.T) {
 
 func TestRolloutCoordinator_ReconcileRollout_SequentialBlocked(t *testing.T) {
 	scheme := setupTestScheme()
-	
+
 	clusterAClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 	clusterBClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
@@ -626,7 +626,7 @@ func TestGetRolloutGVR(t *testing.T) {
 
 func TestRolloutCoordinator_ReconcileRollout_BlueGreen(t *testing.T) {
 	scheme := setupTestScheme()
-	
+
 	clusterAClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
 	cm := &mockClientManager{
@@ -687,7 +687,7 @@ func TestRolloutCoordinator_ReconcileRollout_BlueGreen(t *testing.T) {
 
 func TestRolloutCoordinator_ReconcileRollout_ABTest(t *testing.T) {
 	scheme := setupTestScheme()
-	
+
 	clusterAClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
 	cm := &mockClientManager{
@@ -828,7 +828,7 @@ func TestRolloutCoordinator_ReconcileRollout_FirstClusterSequential(t *testing.T
 func TestRolloutCoordinator_ReconcileRollout_ClusterOrderNil(t *testing.T) {
 	// Test that nil ClusterOrder defaults to parallel behavior
 	scheme := setupTestScheme()
-	
+
 	clusterAClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 	clusterBClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
@@ -888,7 +888,7 @@ func TestRolloutCoordinator_ReconcileRollout_ClusterOrderNil(t *testing.T) {
 func TestRolloutCoordinator_ReconcileRollout_MultipleClustersSequential(t *testing.T) {
 	// Test sequential rollout with 3 clusters
 	scheme := setupTestScheme()
-	
+
 	clusterAClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 	clusterBClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 	clusterCClient := fake.NewClientBuilder().WithScheme(scheme).Build()

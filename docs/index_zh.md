@@ -47,9 +47,9 @@
 
 ## 项目链接
 
-- [GitHub 仓库](https://github.com/hex-techs/rocket)
-- [问题反馈](https://github.com/hex-techs/rocket/issues)
-- [贡献指南](https://github.com/hex-techs/rocket/blob/main/CONTRIBUTING.md)
+- [GitHub 仓库](https://github.com/fize/rocket)
+- [问题反馈](https://github.com/fize/rocket/issues)
+- [贡献指南](https://github.com/fize/rocket/blob/main/CONTRIBUTING.md)
 
 ## 文档贡献
 

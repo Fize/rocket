@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/hex-techs/rocket)](https://goreportcard.com/report/github.com/hex-techs/rocket)
+[![Go Report Card](https://goreportcard.com/badge/github.com/fize/rocket)](https://goreportcard.com/report/github.com/fize/rocket)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 **Rocket** 是一个云原生多集群应用管理平台，旨在简化跨多个 Kubernetes 集群的应用分发、调度和管理。
@@ -56,7 +56,7 @@ Rocket 采用 Hub-Spoke 架构来高效管理多集群环境。
 
 ```bash
 # 克隆仓库
-git clone https://github.com/hex-techs/rocket.git
+git clone https://github.com/fize/rocket.git
 cd rocket
 
 # 构建二进制文件

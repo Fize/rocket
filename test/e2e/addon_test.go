@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hex-techs/rocket/internal/addon/mcs"
-	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
+	"github.com/fize/rocket/internal/addon/mcs"
+	clusterv1alpha1 "github.com/fize/rocket/pkg/apis/storage/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"

@@ -6,9 +6,9 @@ import (
 	"os"
 	"sync"
 
-	"github.com/hex-techs/rocket/internal/addon"
-	storagev1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
-	"github.com/hex-techs/rocket/pkg/helm"
+	"github.com/fize/rocket/internal/addon"
+	"github.com/fize/rocket/pkg/helm"
+	storagev1alpha1 "github.com/fize/rocket/pkg/apis/storage/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -38,7 +38,7 @@ const (
 	VictoriaMetricsServiceName = "victoria-metrics-victoria-metrics-single"
 
 	// Environment variables for custom charts
-	EnvVMChartURL     = "CHART_VICTORIAMETRICS_URL"
+	EnvVMChartURL      = "CHART_VICTORIAMETRICS_URL"
 	EnvVmAgentChartURL = "CHART_VMAGENT_URL"
 
 	// Config keys for VictoriaMetrics chart
@@ -60,10 +60,10 @@ const (
 	ConfigVmAgentValuesNamespace = "vmAgentValuesNamespace"
 
 	// Config keys for storage
-	ConfigVMStorageClass       = "vmStorageClass"
-	ConfigVMStorageSize        = "vmStorageSize"
-	ConfigVmAgentStorageClass  = "vmAgentStorageClass"
-	ConfigVmAgentStorageSize   = "vmAgentStorageSize"
+	ConfigVMStorageClass      = "vmStorageClass"
+	ConfigVMStorageSize       = "vmStorageSize"
+	ConfigVmAgentStorageClass = "vmAgentStorageClass"
+	ConfigVmAgentStorageSize  = "vmAgentStorageSize"
 
 	// Config keys for connection
 	ConfigVictoriaMetricsURL = "victoriametricsURL"
@@ -255,9 +255,9 @@ func (c *ManagerController) ensureVictoriaMetrics(ctx context.Context, config ad
 	// Configure persistent storage if storageClass is provided
 	if storageClass := config.Config[ConfigVMStorageClass]; storageClass != "" {
 		values["server"].(map[string]interface{})["persistentVolume"] = map[string]interface{}{
-			"enabled":         true,
+			"enabled":          true,
 			"storageClassName": storageClass,
-			"size":            firstNonEmpty(config.Config[ConfigVMStorageSize], "16Gi"),
+			"size":             firstNonEmpty(config.Config[ConfigVMStorageSize], "16Gi"),
 		}
 	} else {
 		// Default: no persistent storage
@@ -316,9 +316,9 @@ func (c *ManagerController) getVictoriaMetricsURL(ctx context.Context, config ad
 
 // AgentController implements the AddonController for the Edge side
 type AgentController struct {
-	helmClient         helm.HelmClient
-	mu                 sync.RWMutex
-	lastVmAgentConfig  map[string]string
+	helmClient        helm.HelmClient
+	mu                sync.RWMutex
+	lastVmAgentConfig map[string]string
 }
 
 // SetHelmClient allows setting a custom HelmClient for testing

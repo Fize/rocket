@@ -11,8 +11,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	appsv1alpha1 "github.com/hex-techs/rocket/pkg/apis/apps/v1alpha1"
-	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
+	appsv1alpha1 "github.com/fize/rocket/pkg/apis/apps/v1alpha1"
+	clusterv1alpha1 "github.com/fize/rocket/pkg/apis/storage/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -69,14 +69,14 @@ func TestRolloutStatusAggregator_AggregateRolloutStatus_Success(t *testing.T) {
 				"namespace": "default",
 			},
 			"status": map[string]interface{}{
-				"phase":               "Progressing",
-				"message":             "Rollout in progress",
-				"currentStepIndex":    int64(2),
-				"currentStepWeight":   int64(50),
-				"stableReplicas":      int64(5),
-				"canaryReplicas":      int64(3),
-				"updatedReplicas":     int64(3),
-				"readyReplicas":       int64(8),
+				"phase":             "Progressing",
+				"message":           "Rollout in progress",
+				"currentStepIndex":  int64(2),
+				"currentStepWeight": int64(50),
+				"stableReplicas":    int64(5),
+				"canaryReplicas":    int64(3),
+				"updatedReplicas":   int64(3),
+				"readyReplicas":     int64(8),
 			},
 		},
 	}
@@ -356,14 +356,14 @@ func TestRolloutStatusAggregator_extractRolloutStatus_AllFields(t *testing.T) {
 			"apiVersion": "rollouts.kruise.io/v1alpha1",
 			"kind":       "Rollout",
 			"status": map[string]interface{}{
-				"phase":               "Succeeded",
-				"message":             "Rollout completed successfully",
-				"currentStepIndex":    int64(5),
-				"currentStepWeight":   int64(100),
-				"stableReplicas":      int64(10),
-				"canaryReplicas":      int64(0),
-				"updatedReplicas":     int64(10),
-				"readyReplicas":       int64(10),
+				"phase":             "Succeeded",
+				"message":           "Rollout completed successfully",
+				"currentStepIndex":  int64(5),
+				"currentStepWeight": int64(100),
+				"stableReplicas":    int64(10),
+				"canaryReplicas":    int64(0),
+				"updatedReplicas":   int64(10),
+				"readyReplicas":     int64(10),
 			},
 		},
 	}

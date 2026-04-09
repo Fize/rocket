@@ -38,13 +38,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/hex-techs/rocket/internal/manager/application/overrides"
-	"github.com/hex-techs/rocket/internal/manager/cluster"
-	managermetrics "github.com/hex-techs/rocket/internal/manager/metrics"
-	appsv1alpha1 "github.com/hex-techs/rocket/pkg/apis/apps/v1alpha1"
-	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
-	"github.com/hex-techs/rocket/pkg/observability"
-	"github.com/hex-techs/rocket/pkg/util/labels"
+	"github.com/fize/rocket/internal/manager/application/overrides"
+	"github.com/fize/rocket/pkg/observability"
+	appsv1alpha1 "github.com/fize/rocket/pkg/apis/apps/v1alpha1"
+	clusterv1alpha1 "github.com/fize/rocket/pkg/apis/storage/v1alpha1"
+	"github.com/fize/rocket/internal/manager/cluster"
+	managermetrics "github.com/fize/rocket/internal/manager/metrics"
+	"github.com/fize/rocket/pkg/util/labels"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -53,11 +53,11 @@ import (
 // ApplicationReconciler reconciles a Application object
 type ApplicationReconciler struct {
 	client.Client
-	Scheme              *runtime.Scheme
-	ClientManager       *cluster.ClientManager
-	Recorder            record.EventRecorder
-	RolloutCoordinator  *RolloutCoordinator
-	RolloutStatusAggr   *RolloutStatusAggregator
+	Scheme             *runtime.Scheme
+	ClientManager      *cluster.ClientManager
+	Recorder           record.EventRecorder
+	RolloutCoordinator *RolloutCoordinator
+	RolloutStatusAggr  *RolloutStatusAggregator
 }
 
 // +kubebuilder:rbac:groups=apps.rocket.io,resources=applications,verbs=get;list;watch;create;update;patch;delete
@@ -752,11 +752,11 @@ func (r *ApplicationReconciler) reconcileResiliency(ctx context.Context, cli cli
 // SetupWithManager sets up the controller with the Manager.
 func (r *ApplicationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.Recorder = mgr.GetEventRecorderFor("application-controller")
-	
+
 	// Initialize RolloutCoordinator and StatusAggregator
 	r.RolloutCoordinator = NewRolloutCoordinator(r.ClientManager)
 	r.RolloutStatusAggr = NewRolloutStatusAggregator(r.ClientManager)
-	
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&appsv1alpha1.Application{}).
 		Complete(r)

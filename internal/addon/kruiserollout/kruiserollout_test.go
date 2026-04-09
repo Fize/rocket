@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/hex-techs/rocket/internal/addon"
-	"github.com/hex-techs/rocket/pkg/helm"
+	"github.com/fize/rocket/internal/addon"
+	"github.com/fize/rocket/pkg/helm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"helm.sh/helm/v3/pkg/release"
@@ -212,13 +212,13 @@ func TestAgentController_updateLastConfig(t *testing.T) {
 	controller := &AgentController{}
 
 	cfg := map[string]string{
-		ConfigChartURL:          "https://example.com/chart.tgz",
-		ConfigChartRepoURL:      "https://charts.example.com",
-		ConfigChartName:         "kruise-rollout",
-		ConfigChartVersion:      "1.0.0",
-		ConfigValuesConfigMap:   "my-configmap",
-		ConfigValuesSecret:      "my-secret",
-		ConfigValuesNamespace:   "default",
+		ConfigChartURL:        "https://example.com/chart.tgz",
+		ConfigChartRepoURL:    "https://charts.example.com",
+		ConfigChartName:       "kruise-rollout",
+		ConfigChartVersion:    "1.0.0",
+		ConfigValuesConfigMap: "my-configmap",
+		ConfigValuesSecret:    "my-secret",
+		ConfigValuesNamespace: "default",
 	}
 
 	controller.updateLastConfig(cfg)

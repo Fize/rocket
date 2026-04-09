@@ -1,7 +1,7 @@
 package queue
 
 import (
-	appsv1alpha1 "github.com/hex-techs/rocket/pkg/apis/apps/v1alpha1"
+	appsv1alpha1 "github.com/fize/rocket/pkg/apis/apps/v1alpha1"
 )
 
 // SchedulingQueue stores applications that need to be scheduled.

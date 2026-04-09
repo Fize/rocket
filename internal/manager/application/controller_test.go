@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/hex-techs/rocket/internal/manager/cluster"
-	appsv1alpha1 "github.com/hex-techs/rocket/pkg/apis/apps/v1alpha1"
-	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
+	"github.com/fize/rocket/internal/manager/cluster"
+	appsv1alpha1 "github.com/fize/rocket/pkg/apis/apps/v1alpha1"
+	clusterv1alpha1 "github.com/fize/rocket/pkg/apis/storage/v1alpha1"
 	"github.com/rancher/remotedialer"
 	"github.com/stretchr/testify/assert"
 	appsv1 "k8s.io/api/apps/v1"

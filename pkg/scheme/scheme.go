@@ -7,10 +7,10 @@ import (
 
 	kruiseapi "github.com/openkruise/kruise-api"
 
-	appsv1alpha1 "github.com/hex-techs/rocket/pkg/apis/apps/v1alpha1"
-	aggregatedclusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/cluster/v1alpha1"
-	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
-	workspacev1alpha1 "github.com/hex-techs/rocket/pkg/apis/workspace/v1alpha1"
+	appsv1alpha1 "github.com/fize/rocket/pkg/apis/apps/v1alpha1"
+	aggregatedclusterv1alpha1 "github.com/fize/rocket/pkg/apis/cluster/v1alpha1"
+	clusterv1alpha1 "github.com/fize/rocket/pkg/apis/storage/v1alpha1"
+	workspacev1alpha1 "github.com/fize/rocket/pkg/apis/workspace/v1alpha1"
 )
 
 // Scheme is the default scheme for Rocket

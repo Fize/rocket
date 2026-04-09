@@ -19,11 +19,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
-	"github.com/hex-techs/rocket/pkg/constants"
-	agentmetrics "github.com/hex-techs/rocket/internal/agent/metrics"
-	"github.com/hex-techs/rocket/pkg/observability"
-	"github.com/hex-techs/rocket/pkg/scheme"
+	clusterv1alpha1 "github.com/fize/rocket/pkg/apis/storage/v1alpha1"
+	"github.com/fize/rocket/pkg/constants"
+	"github.com/fize/rocket/pkg/observability"
+	"github.com/fize/rocket/pkg/scheme"
+	agentmetrics "github.com/fize/rocket/internal/agent/metrics"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"

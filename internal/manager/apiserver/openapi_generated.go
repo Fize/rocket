@@ -11,10 +11,10 @@ import (
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
 		// Our custom types from cluster.rocket.io
-		"github.com/hex-techs/rocket/pkg/apis/cluster/v1alpha1.Cluster":       stubClusterDef(ref),
-		"github.com/hex-techs/rocket/pkg/apis/cluster/v1alpha1.ClusterList":   stubClusterListDef(ref),
-		"github.com/hex-techs/rocket/pkg/apis/cluster/v1alpha1.ClusterSpec":   stubObjectDef(),
-		"github.com/hex-techs/rocket/pkg/apis/cluster/v1alpha1.ClusterStatus": stubObjectDef(),
+		"github.com/fize/rocket/pkg/apis/cluster/v1alpha1.Cluster":  stubClusterDef(ref),
+		"github.com/fize/rocket/pkg/apis/cluster/v1alpha1.ClusterList":   stubClusterListDef(ref),
+		"github.com/fize/rocket/pkg/apis/cluster/v1alpha1.ClusterSpec":   stubObjectDef(),
+		"github.com/fize/rocket/pkg/apis/cluster/v1alpha1.ClusterStatus": stubObjectDef(),
 
 		// Core Kubernetes types that might be referenced
 		"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta": stubObjectDef(),

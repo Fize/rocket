@@ -1,2 +1,2 @@
 For more information on running Rocket, visit:
-https://github.com/Hex-Techs/rocket
+https://github.com/fize/rocket

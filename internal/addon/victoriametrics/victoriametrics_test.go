@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/hex-techs/rocket/internal/addon"
-	storagev1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
+	"github.com/fize/rocket/internal/addon"
+	storagev1alpha1 "github.com/fize/rocket/pkg/apis/storage/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"helm.sh/helm/v3/pkg/release"
@@ -344,15 +344,15 @@ func TestManagerController_Reconcile_WithStorage(t *testing.T) {
 
 	// Verify Helm install was called
 	require.Len(t, mockHelm.installOrUpgradeCalls, 1)
-	
+
 	// Verify persistent storage configuration
 	values := mockHelm.installOrUpgradeCalls[0].values
 	server, ok := values["server"].(map[string]interface{})
 	require.True(t, ok)
-	
+
 	pv, ok := server["persistentVolume"].(map[string]interface{})
 	require.True(t, ok)
-	
+
 	assert.Equal(t, true, pv["enabled"])
 	assert.Equal(t, "fast-ssd", pv["storageClassName"])
 	assert.Equal(t, "50Gi", pv["size"])
@@ -375,9 +375,9 @@ func TestAgentController_Reconcile_WithStorage(t *testing.T) {
 	config := addon.AddonConfig{
 		ClusterName: "test-cluster",
 		Config: map[string]string{
-			ConfigVictoriaMetricsURL:   vmURL,
-			ConfigVmAgentStorageClass:  "local-storage",
-			ConfigVmAgentStorageSize:   "20Gi",
+			ConfigVictoriaMetricsURL:  vmURL,
+			ConfigVmAgentStorageClass: "local-storage",
+			ConfigVmAgentStorageSize:  "20Gi",
 		},
 		Client: c,
 	}
@@ -393,7 +393,7 @@ func TestAgentController_Reconcile_WithStorage(t *testing.T) {
 	values := mockHelm.installOrUpgradeCalls[0].values
 	pv, ok := values["persistentVolume"].(map[string]interface{})
 	require.True(t, ok)
-	
+
 	assert.Equal(t, true, pv["enabled"])
 	assert.Equal(t, "local-storage", pv["storageClassName"])
 	assert.Equal(t, "20Gi", pv["size"])

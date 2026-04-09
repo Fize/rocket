@@ -9,10 +9,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	"github.com/hex-techs/rocket/internal/manager/scheduler/cache"
-	"github.com/hex-techs/rocket/internal/manager/scheduler/queue"
-	appsv1alpha1 "github.com/hex-techs/rocket/pkg/apis/apps/v1alpha1"
-	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
+	"github.com/fize/rocket/internal/manager/scheduler/cache"
+	appsv1alpha1 "github.com/fize/rocket/pkg/apis/apps/v1alpha1"
+	clusterv1alpha1 "github.com/fize/rocket/pkg/apis/storage/v1alpha1"
+	"github.com/fize/rocket/internal/manager/scheduler/queue"
 )
 
 // EventHandler watches for Application and Cluster changes and updates the scheduler cache/queue.

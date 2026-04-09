@@ -6,9 +6,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/hex-techs/rocket/internal/addon"
-	storagev1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
-	"github.com/hex-techs/rocket/pkg/helm"
+	"github.com/fize/rocket/internal/addon"
+	"github.com/fize/rocket/pkg/helm"
+	storagev1alpha1 "github.com/fize/rocket/pkg/apis/storage/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	helm_release "helm.sh/helm/v3/pkg/release"
