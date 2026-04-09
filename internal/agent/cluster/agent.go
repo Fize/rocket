@@ -21,7 +21,12 @@ import (
 
 	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
 	"github.com/hex-techs/rocket/pkg/constants"
+	agentmetrics "github.com/hex-techs/rocket/internal/agent/metrics"
+	"github.com/hex-techs/rocket/pkg/observability"
 	"github.com/hex-techs/rocket/pkg/scheme"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // AgentOptions holds the configuration for the Agent
@@ -173,8 +178,18 @@ func (a *Agent) StartHeartbeat(ctx context.Context) error {
 }
 
 func (a *Agent) sendHeartbeat(ctx context.Context) error {
+	ctx, span := observability.Tracer().Start(ctx, "Agent.Heartbeat",
+		trace.WithAttributes(
+			attribute.String("cluster.name", a.Options.ClusterName),
+		),
+	)
+	defer span.End()
+
+	startTime := time.Now()
 	cluster := &clusterv1alpha1.ManagedCluster{}
 	if err := a.HubClient.Get(ctx, client.ObjectKey{Name: a.Options.ClusterName}, cluster); err != nil {
+		agentmetrics.RecordHeartbeat("error", time.Since(startTime))
+		observability.SpanError(ctx, err)
 		return err
 	}
 
@@ -182,8 +197,12 @@ func (a *Agent) sendHeartbeat(ctx context.Context) error {
 	cluster.Status.LastKeepAliveTime = &now
 
 	if err := a.HubClient.Status().Update(ctx, cluster); err != nil {
-		return a.HubClient.Update(ctx, cluster)
+		err = a.HubClient.Update(ctx, cluster)
+		agentmetrics.RecordHeartbeat("error", time.Since(startTime))
+		observability.SpanError(ctx, err)
+		return err
 	}
+	agentmetrics.RecordHeartbeat("success", time.Since(startTime))
 	return nil
 }
 
@@ -202,6 +221,8 @@ func (a *Agent) StartTunnel(ctx context.Context) error {
 
 	log.Log.Info("Starting tunnel", "url", url)
 
+	agentmetrics.SetTunnelConnected(false)
+
 	dialer := &websocket.Dialer{
 		Proxy:            http.ProxyFromEnvironment,
 		HandshakeTimeout: 45 * time.Second,
@@ -211,16 +232,30 @@ func (a *Agent) StartTunnel(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
+			agentmetrics.SetTunnelConnected(false)
 			return nil
 		default:
+			_, span := observability.Tracer().Start(ctx, "Agent.TunnelConnect",
+				trace.WithAttributes(
+					attribute.String("cluster.name", a.Options.ClusterName),
+					attribute.String("tunnel.url", url),
+				),
+			)
+
 			log.Log.Info("Starting connection attempt", "url", url)
 			err := remotedialer.ClientConnect(ctx, url, headers, dialer, func(proto, address string) bool {
 				return true
 			}, nil)
 			if err != nil {
 				log.Log.Error(err, "Tunnel disconnected")
+				agentmetrics.RecordTunnelReconnect("error")
+				observability.SpanError(ctx, err)
+				span.End()
 			} else {
 				log.Log.Info("Tunnel connected successfully (no error returned)")
+				agentmetrics.SetTunnelConnected(true)
+				agentmetrics.RecordTunnelReconnect("success")
+				span.End()
 			}
 			log.Log.Info("Sleeping 5 seconds before retry")
 			time.Sleep(5 * time.Second)

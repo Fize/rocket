@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -39,9 +40,14 @@ import (
 
 	"github.com/hex-techs/rocket/internal/manager/application/overrides"
 	"github.com/hex-techs/rocket/internal/manager/cluster"
+	managermetrics "github.com/hex-techs/rocket/internal/manager/metrics"
 	appsv1alpha1 "github.com/hex-techs/rocket/pkg/apis/apps/v1alpha1"
 	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
+	"github.com/hex-techs/rocket/pkg/observability"
 	"github.com/hex-techs/rocket/pkg/util/labels"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // ApplicationReconciler reconciles a Application object
@@ -66,11 +72,25 @@ const (
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
+	logger := observability.TraceLogger(ctx, log.FromContext(ctx))
 
 	var app appsv1alpha1.Application
 	if err := r.Get(ctx, req.NamespacedName, &app); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	ctx, span := observability.Tracer().Start(ctx, "ApplicationReconcile",
+		trace.WithAttributes(
+			attribute.String("application.name", app.Name),
+			attribute.String("application.namespace", app.Namespace),
+		),
+	)
+	defer span.End()
+
+	// Update managed application total count
+	appList := &appsv1alpha1.ApplicationList{}
+	if err := r.List(ctx, appList); err == nil {
+		managermetrics.SetManagedApplicationTotal(len(appList.Items))
 	}
 
 	// Handle deletion
@@ -117,6 +137,7 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	for i, topology := range topologyList {
 		currentClusters[topology.Name] = true
+		startTime := time.Now()
 
 		// Sequential Rollout Check for StatefulSet
 		// We check if the previous cluster in the topology is healthy before proceeding to the current one.
@@ -178,8 +199,11 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 		if err := r.reconcileWorkload(ctx, targetClient, &app, &clusterObj, ordinalStart); err != nil {
 			logger.Error(err, "Failed to reconcile workload on cluster", "cluster", topology.Name)
+			managermetrics.RecordWorkloadDeploy(app.Name, topology.Name, app.Spec.Workload.Kind, "error", time.Since(startTime))
+			observability.SpanError(ctx, err)
 			return ctrl.Result{}, err
 		}
+		managermetrics.RecordWorkloadDeploy(app.Name, topology.Name, app.Spec.Workload.Kind, "success", time.Since(startTime))
 
 		if err := r.reconcileResiliency(ctx, targetClient, &app); err != nil {
 			logger.Error(err, "Failed to reconcile PDB on cluster", "cluster", topology.Name)
@@ -300,6 +324,15 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		} else {
 			globalReplicas += cs.Replicas // Fallback to observed replicas
 		}
+
+		// Record status sync metric
+		managermetrics.RecordStatusSync(app.Name, clusterName, "success")
+	}
+
+	// Update application health phase metric
+	managermetrics.ClearApplicationHealthPhase(app.Name)
+	for _, cs := range clusterStatuses {
+		managermetrics.SetApplicationHealthPhase(app.Name, string(cs.Phase))
 	}
 
 	patch := client.MergeFrom(app.DeepCopy())
@@ -394,6 +427,7 @@ func (r *ApplicationReconciler) reconcileDelete(ctx context.Context, app *appsv1
 		return ctrl.Result{}, err
 	}
 
+	managermetrics.ClearApplicationHealthPhase(app.Name)
 	return ctrl.Result{}, nil
 }
 

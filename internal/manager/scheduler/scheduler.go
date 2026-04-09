@@ -25,6 +25,10 @@ import (
 	"github.com/hex-techs/rocket/internal/manager/scheduler/queue"
 	appsv1alpha1 "github.com/hex-techs/rocket/pkg/apis/apps/v1alpha1"
 	clusterv1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
+	"github.com/hex-techs/rocket/pkg/observability"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // DefaultTopologyKey is the default label key used for topology spread
@@ -127,7 +131,7 @@ func (s *Scheduler) Run(ctx context.Context) {
 }
 
 func (s *Scheduler) scheduleOne(ctx context.Context) {
-	logger := log.FromContext(ctx)
+	logger := observability.TraceLogger(ctx, log.FromContext(ctx))
 	startTime := time.Now()
 	var scheduleResult string = "error"
 
@@ -139,6 +143,13 @@ func (s *Scheduler) scheduleOne(ctx context.Context) {
 		logger.Error(err, "Failed to pop application from queue")
 		return
 	}
+
+	ctx, span := observability.Tracer().Start(ctx, "Scheduler.ScheduleOne",
+		trace.WithAttributes(
+			attribute.String("application.name", app.Name),
+		),
+	)
+	defer span.End()
 
 	// Ensure we call Done when finished processing (standard workqueue pattern)
 	defer func() {

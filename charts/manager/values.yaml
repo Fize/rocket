@@ -78,3 +78,10 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+# OpenTelemetry Tracing configuration
+tracing:
+  enabled: false
+  otlpEndpoint: ""
+  otlpInsecure: true
+  sampleRate: 1.0

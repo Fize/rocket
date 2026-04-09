@@ -26,12 +26,14 @@ import (
 	_ "github.com/hex-techs/rocket/internal/addon/kruiserollout"
 	_ "github.com/hex-techs/rocket/internal/addon/mcs"
 	_ "github.com/hex-techs/rocket/internal/addon/victoriametrics"
+	"github.com/hex-techs/rocket/pkg/observability"
 	"github.com/hex-techs/rocket/pkg/scheme"
 	"github.com/spf13/pflag"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 )
@@ -57,6 +59,9 @@ func main() {
 	var clusterName string
 	var bootstrapToken string
 	var heartbeatInterval time.Duration
+	var otlpEndpoint string
+	var otlpInsecure bool
+	var traceSampleRate float64
 
 	opts := zap.Options{
 		Development: true,
@@ -74,9 +79,32 @@ func main() {
 	pflag.StringVar(&clusterName, "cluster-name", "", "The name of this cluster in the Hub")
 	pflag.StringVar(&bootstrapToken, "bootstrap-token", "", "The bootstrap token for authentication")
 	pflag.DurationVar(&heartbeatInterval, "heartbeat-interval", 1*time.Minute, "The interval for sending heartbeats")
+	pflag.StringVar(&otlpEndpoint, "otlp-endpoint", "", "The OTLP endpoint for trace export (e.g. otel-collector:4317). Empty means tracing disabled.")
+	pflag.BoolVar(&otlpInsecure, "otlp-insecure", true, "Use insecure connection for OTLP gRPC.")
+	pflag.Float64Var(&traceSampleRate, "trace-sample-rate", 1.0, "Trace sampling rate (0.0-1.0). Only effective when --otlp-endpoint is set.")
 	pflag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	if err := observability.InitTracer(observability.Config{
+		ServiceName:  "rocket-agent",
+		OTLPEndpoint: otlpEndpoint,
+		OTLPInsecure: otlpInsecure,
+		SampleRate:   traceSampleRate,
+	}); err != nil {
+		setupLog.Error(err, "unable to initialize tracer")
+		os.Exit(1)
+	}
+
+	if err := observability.InitMeterProvider(observability.Config{
+		ServiceName:  "rocket-agent",
+		OTLPEndpoint: otlpEndpoint,
+		OTLPInsecure: otlpInsecure,
+		SampleRate:   traceSampleRate,
+	}, metrics.Registry); err != nil {
+		setupLog.Error(err, "unable to initialize meter provider")
+		os.Exit(1)
+	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme.Scheme,

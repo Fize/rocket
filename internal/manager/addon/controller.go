@@ -3,12 +3,18 @@ package addon
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/hex-techs/rocket/internal/addon"
+	managermetrics "github.com/hex-techs/rocket/internal/manager/metrics"
 	storagev1alpha1 "github.com/hex-techs/rocket/pkg/apis/storage/v1alpha1"
+	"github.com/hex-techs/rocket/pkg/observability"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // AddonReconciler reconciles Addons on ManagedCluster
@@ -34,6 +40,13 @@ func (r *AddonReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	if err := r.Get(ctx, req.NamespacedName, &cluster); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+
+	ctx, span := observability.Tracer().Start(ctx, "AddonReconcile",
+		trace.WithAttributes(
+			attribute.String("cluster.name", cluster.Name),
+		),
+	)
+	defer span.End()
 
 	// Track if status needs update
 	statusUpdated := false
@@ -75,15 +88,19 @@ func (r *AddonReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 			Client:      r.Client,
 		}
 
+		addonStart := time.Now()
 		if err := controller.Reconcile(ctx, addonConfig); err != nil {
 			// Update status with error
 			r.updateAddonStatus(&cluster, addonName, "Failed", fmt.Sprintf("Reconcile error: %v", err))
+			managermetrics.RecordAddonReconcile(addonName, "error", time.Since(addonStart))
+			observability.SpanError(ctx, err)
 			statusUpdated = true
 			continue
 		}
 
 		// Update status as Applied
 		r.updateAddonStatus(&cluster, addonName, "Applied", "Addon successfully applied")
+		managermetrics.RecordAddonReconcile(addonName, "success", time.Since(addonStart))
 		statusUpdated = true
 	}
 

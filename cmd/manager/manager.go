@@ -12,6 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	_ "github.com/hex-techs/rocket/internal/addon/kruiserollout"
 	_ "github.com/hex-techs/rocket/internal/addon/mcs"
@@ -26,6 +27,7 @@ import (
 	"github.com/hex-techs/rocket/internal/manager/scheduler/queue"
 	"github.com/hex-techs/rocket/internal/manager/sharding"
 	"github.com/hex-techs/rocket/internal/manager/workspace"
+	"github.com/hex-techs/rocket/pkg/observability"
 	"github.com/hex-techs/rocket/pkg/scheme"
 )
 
@@ -45,6 +47,9 @@ func main() {
 	var disabledAPIServer bool
 	var enabledControllers string
 	var schedulerResourceStrategy string
+	var otlpEndpoint string
+	var otlpInsecure bool
+	var traceSampleRate float64
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -59,6 +64,9 @@ func main() {
 	flag.BoolVar(&disabledAPIServer, "disabled-apiserver", false, "Disable aggregated apiserver")
 	flag.StringVar(&enabledControllers, "enabled-controllers", "", "The controllers to enable (comma separated). Empty means all.")
 	flag.StringVar(&schedulerResourceStrategy, "scheduler-resource-strategy", "LeastAllocated", "The resource strategy to use for scheduling (LeastAllocated or MostAllocated).")
+	flag.StringVar(&otlpEndpoint, "otlp-endpoint", "", "The OTLP endpoint for trace export (e.g. otel-collector:4317). Empty means tracing disabled.")
+	flag.BoolVar(&otlpInsecure, "otlp-insecure", true, "Use insecure connection for OTLP gRPC.")
+	flag.Float64Var(&traceSampleRate, "trace-sample-rate", 1.0, "Trace sampling rate (0.0-1.0). Only effective when --otlp-endpoint is set.")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -66,6 +74,26 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	if err := observability.InitTracer(observability.Config{
+		ServiceName:  "rocket-manager",
+		OTLPEndpoint: otlpEndpoint,
+		OTLPInsecure: otlpInsecure,
+		SampleRate:   traceSampleRate,
+	}); err != nil {
+		setupLog.Error(err, "unable to initialize tracer")
+		os.Exit(1)
+	}
+
+	if err := observability.InitMeterProvider(observability.Config{
+		ServiceName:  "rocket-manager",
+		OTLPEndpoint: otlpEndpoint,
+		OTLPInsecure: otlpInsecure,
+		SampleRate:   traceSampleRate,
+	}, metrics.Registry); err != nil {
+		setupLog.Error(err, "unable to initialize meter provider")
+		os.Exit(1)
+	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme.Scheme,

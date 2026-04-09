@@ -14,7 +14,12 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/hex-techs/rocket/internal/manager/metrics"
 	"github.com/hex-techs/rocket/pkg/constants"
+	"github.com/hex-techs/rocket/pkg/observability"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // ClusterReconciler reconciles a ManagedCluster object
@@ -51,7 +56,22 @@ func (r *ClusterReconciler) findClusterBySecretRef(ctx context.Context, secretNa
 func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var cluster clusterv1alpha1.ManagedCluster
 	if err := r.Get(ctx, req.NamespacedName, &cluster); err != nil {
+		metrics.RemoveClusterMetrics(req.Name)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	ctx, span := observability.Tracer().Start(ctx, "ClusterReconcile",
+		trace.WithAttributes(
+			attribute.String("cluster.name", cluster.Name),
+			attribute.String("cluster.mode", string(cluster.Spec.ConnectionMode)),
+		),
+	)
+	defer span.End()
+
+	// Update managed cluster total count
+	clusterList := &clusterv1alpha1.ManagedClusterList{}
+	if err := r.List(ctx, clusterList); err == nil {
+		metrics.SetManagedClusterTotal(len(clusterList.Items))
 	}
 
 	// Clean up client cache when cluster is updated
@@ -74,6 +94,7 @@ func (r *ClusterReconciler) reconcileHub(ctx context.Context, cluster *clusterv1
 	if cluster.Spec.SecretRef == nil || cluster.Spec.SecretRef.Name == "" {
 		if cluster.Status.State != clusterv1alpha1.ClusterRejected {
 			cluster.Status.State = clusterv1alpha1.ClusterRejected
+			metrics.SetClusterConnectionState(cluster.Name, false)
 			return ctrl.Result{}, r.updateStatus(ctx, cluster)
 		}
 		return ctrl.Result{}, nil
@@ -98,6 +119,7 @@ func (r *ClusterReconciler) reconcileHub(ctx context.Context, cluster *clusterv1
 			cluster.Status.ID = uuid.New().String()
 		}
 		cluster.Status.State = clusterv1alpha1.ClusterReady
+		metrics.SetClusterConnectionState(cluster.Name, true)
 		if err := r.updateStatus(ctx, cluster); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -132,9 +154,15 @@ func (r *ClusterReconciler) reconcileEdge(ctx context.Context, cluster *clusterv
 
 	// 3. Check Heartbeat
 	if cluster.Status.LastKeepAliveTime != nil {
-		if time.Since(cluster.Status.LastKeepAliveTime.Time) > r.HeartbeatTimeout {
+		heartbeatLatency := time.Since(cluster.Status.LastKeepAliveTime.Time)
+		metrics.SetHeartbeatLatency(cluster.Name, heartbeatLatency)
+
+		if heartbeatLatency > r.HeartbeatTimeout {
 			if cluster.Status.State != clusterv1alpha1.ClusterOffline {
 				cluster.Status.State = clusterv1alpha1.ClusterOffline
+				metrics.SetClusterConnectionState(cluster.Name, false)
+				ctrl.Log.Info("Cluster went offline", "cluster", cluster.Name, "last_heartbeat", cluster.Status.LastKeepAliveTime.Time)
+				observability.SpanError(ctx, fmt.Errorf("heartbeat timeout: %v", heartbeatLatency))
 				if err := r.updateStatus(ctx, cluster); err != nil {
 					return ctrl.Result{}, err
 				}
@@ -144,6 +172,7 @@ func (r *ClusterReconciler) reconcileEdge(ctx context.Context, cluster *clusterv
 			// But handleEdgeCredentials should have set it to Ready
 			if cluster.Status.State != clusterv1alpha1.ClusterReady && cluster.Status.State != clusterv1alpha1.ClusterOffline {
 				cluster.Status.State = clusterv1alpha1.ClusterReady
+				metrics.SetClusterConnectionState(cluster.Name, true)
 				if err := r.updateStatus(ctx, cluster); err != nil {
 					return ctrl.Result{}, err
 				}
@@ -201,6 +230,7 @@ func (r *ClusterReconciler) handleEdgeCredentials(ctx context.Context, cluster *
 	// Update Cluster Status
 	cluster.Status.APIServerURL = apiServerURL
 	cluster.Status.State = clusterv1alpha1.ClusterReady
+	metrics.SetClusterConnectionState(cluster.Name, true)
 	if err := r.updateStatus(ctx, cluster); err != nil {
 		return err
 	}

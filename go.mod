@@ -95,6 +95,7 @@ require (
 	go.etcd.io/etcd/client/v2 v2.305.12 // indirect
 	go.etcd.io/etcd/client/v3 v3.5.12 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.49.0 // indirect
+	go.opentelemetry.io/otel/exporters/prometheus v0.57.0 // indirect
 	go.starlark.net v0.0.0-20230525235612-a134d8f9ddca // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
